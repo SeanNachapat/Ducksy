@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Square, Pause, Play, Mic, Monitor, Camera, Home, ChevronDown, ChevronUp, X, Loader2, RefreshCw, CalendarPlus, Check, Plus, Calendar, Sparkles, Upload, Volume2, VolumeX } from "lucide-react"
 
@@ -27,6 +27,80 @@ export default function OnRecordPage() {
       const [eventDate, setEventDate] = useState('')
       const [eventTime, setEventTime] = useState('')
       const [isDragging, setIsDragging] = useState(false)
+      const [waveHistory, setWaveHistory] = useState(Array(18).fill(0.15))
+      const lastUpdateRef = useRef(0)
+
+      useEffect(() => {
+            if (!isRecording) {
+                  setWaveHistory(Array(18).fill(0.15))
+                  return
+            }
+
+            let audioContext
+            let analyser
+            let source
+            let animationFrameId
+            let stream
+
+            const setupAudio = async () => {
+                  try {
+                        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+                        const AudioContext = window.AudioContext || window.webkitAudioContext
+                        audioContext = new AudioContext()
+                        analyser = audioContext.createAnalyser()
+                        analyser.fftSize = 64
+                        
+                        source = audioContext.createMediaStreamSource(stream)
+                        source.connect(analyser)
+
+                        const dataArray = new Uint8Array(analyser.frequencyBinCount)
+                        
+                        const updateVolume = () => {
+                              if (analyser) {
+                                    analyser.getByteFrequencyData(dataArray)
+                                    let sum = 0
+                                    for (let i = 0; i < dataArray.length; i++) {
+                                          sum += dataArray[i]
+                                    }
+                                    const average = sum / dataArray.length
+                                    const normalized = Math.min(average / 120, 1)
+                                    
+                                    const now = Date.now()
+                                    // Throttle updating the sliding wave to every 80ms to create a smooth scrolling effect
+                                    if (now - lastUpdateRef.current > 80) {
+                                          if (!recorderIsPaused) {
+                                                setWaveHistory(prev => {
+                                                      const next = [...prev.slice(1), Math.max(0.15, normalized)]
+                                                      return next
+                                                })
+                                                lastUpdateRef.current = now
+                                          }
+                                    }
+                              }
+                              animationFrameId = requestAnimationFrame(updateVolume)
+                        }
+
+                        updateVolume()
+                  } catch (err) {
+                        console.error("Failed to setup audio visualizer:", err)
+                  }
+            }
+
+            setupAudio()
+
+            return () => {
+                  if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId)
+                  }
+                  if (source) source.disconnect()
+                  if (audioContext && audioContext.state !== 'closed') {
+                        audioContext.close()
+                  }
+                  if (stream) {
+                        stream.getTracks().forEach(track => track.stop())
+                  }
+            }
+      }, [isRecording])
 
       const {
             isRecording: recorderIsRecording,
@@ -55,6 +129,27 @@ export default function OnRecordPage() {
                   })
             }
       }, [])
+
+      // Declarative window resizer based on active states (statically expanded notch)
+      useEffect(() => {
+            if (typeof window === 'undefined' || !window.electron) return
+
+            let targetWidth = 432
+            let targetHeight = 40
+
+            if (transcriptionResult) {
+                  targetHeight = expanded ? 600 : 40
+                  targetWidth = 482
+            } else if (isProcessing) {
+                  targetHeight = 120
+                  targetWidth = 432
+            } else {
+                  targetHeight = 40
+                  targetWidth = 432
+            }
+
+            window.electron.send('resize-recording-window', { width: targetWidth, height: targetHeight })
+      }, [transcriptionResult, isProcessing, expanded])
 
       useEffect(() => {
             if (!audioBlob) return
@@ -400,10 +495,32 @@ export default function OnRecordPage() {
             e.stopPropagation();
             setIsDragging(false);
       };
+      const renderWaveform = () => {
+            return (
+                  <div className="flex items-center gap-[2.5px] h-5 justify-center overflow-hidden">
+                        {waveHistory.map((val, i) => {
+                              const maxPossibleHeight = 18
+                              // smooth scaling calculation based on value in the sliding history array
+                              const height = Math.max(3, val * maxPossibleHeight)
+                              
+                              return (
+                                    <motion.div
+                                          key={i}
+                                          animate={{ height }}
+                                          transition={{ type: "spring", stiffness: 350, damping: 20 }}
+                                          className={`w-[4px] rounded-full ${
+                                                 i % 2 === 0 ? (recorderIsPaused ? 'bg-gray-500' : 'bg-amber-500') : (recorderIsPaused ? 'bg-gray-500' : 'bg-red-500')
+                                           }`}
+                                    />
+                              )
+                        })}
+                  </div>
+            )
+      }
 
       return (
             <div
-                  className="h-full w-full flex flex-col items-center justify-center p-4 bg-transparent overflow-hidden"
+                  className="h-full w-full flex flex-col items-center justify-start p-0 bg-transparent overflow-visible"
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -415,7 +532,7 @@ export default function OnRecordPage() {
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
-                                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm border-2 border-dashed border-amber-500/50 rounded-3xl"
+                                    className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm border-2 border-dashed border-amber-500/50 rounded-b-[24px]"
                               >
                                     <div className="flex flex-col items-center gap-3">
                                           <Upload className="w-12 h-12 text-amber-500" />
@@ -425,178 +542,113 @@ export default function OnRecordPage() {
                               </motion.div>
                         )}
                   </AnimatePresence>
+                  
+                  {/* Camera Notch Container */}
                   <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="relative"
+                        animate={{ y: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                        className="w-full max-w-[400px] select-none shrink-0 z-50 overflow-visible"
                   >
-                        <div className="relative bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-full px-6 py-3 shadow-2xl shadow-black/50 draggable">
-                              <div className={`absolute inset-0 rounded-full blur-xl opacity-50 ${isRecording ? 'bg-linear-to-r from-amber-500/20 via-red-500/20 to-amber-500/20 animate-pulse' : 'bg-linear-to-r from-amber-500/10 via-amber-500/10 to-amber-500/10'}`} />
+                        <div className="relative w-full h-[40px] bg-black rounded-b-[20px] shadow-2xl flex items-center pt-[2px] justify-between px-3 select-none">
+                              {/* Left curved transition corner */}
+                              <svg className="absolute top-0 right-full w-4 h-4 text-black fill-current pointer-events-none" viewBox="0 0 16 16">
+                                    <path d="M16,16 L16,0 L0,0 C8.83,0 16,7.17 16,16 Z" />
+                              </svg>
 
-                              <div className="relative flex items-center gap-2">
-                                    {isRecording ? (
-                                          <>
-                                                <div className="flex items-center gap-2 pl-1 pr-2">
-                                                      <motion.div
-                                                            animate={{
-                                                                  scale: isPaused ? 1 : [1, 1.2, 1],
-                                                                  opacity: isPaused ? 0.5 : [1, 0.8, 1]
-                                                            }}
-                                                            transition={{
-                                                                  duration: 1.5,
-                                                                  repeat: Infinity,
-                                                                  ease: "easeInOut"
-                                                            }}
-                                                            className={`w-3 h-3 rounded-full ${isPaused ? 'bg-[#eab308]' : 'bg-[#ef4444]'} shadow-lg ${isPaused ? 'shadow-yellow-500/50' : 'shadow-red-500/50'}`}
-                                                      />
+                              {/* Right curved transition corner */}
+                              <svg className="absolute top-0 left-full w-4 h-4 text-black fill-current pointer-events-none" viewBox="0 0 16 16">
+                                    <path d="M0,16 L0,0 L16,0 C7.17,0 0,7.17 0,16 Z" />
+                              </svg>
 
-                                                      <div className="text-lg font-mono font-bold text-white tracking-wider">
-                                                            {formattedDuration || recordTime.formatted}
-                                                      </div>
-                                                </div>
+                              {isRecording ? (
+                                    <>
+                                          {/* Total Recording Time on the left */}
+                                          <div className="flex items-center pl-1.5">
+                                                <span className="text-xs font-mono font-bold text-neutral-400 tabular-nums select-none">{formattedDuration}</span>
+                                          </div>
 
+                                          {/* Moving Audio Wave in the center */}
+                                          <div className="flex-1 flex justify-center items-center px-4">
+                                                {renderWaveform()}
+                                          </div>
+
+                                          {/* Stop and Pause controls on the right */}
+                                          <div className="flex items-center gap-1.5 pr-1">
+                                                {/* Pause/Resume Button */}
                                                 <motion.button
-                                                      whileHover={{ scale: 1.05 }}
-                                                      whileTap={{ scale: 0.95 }}
+                                                      whileHover={{ scale: 1.08 }}
+                                                      whileTap={{ scale: 0.92 }}
                                                       onClick={handlePauseResume}
-                                                      className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center transition-all group non-draggable"
+                                                      className="w-7 h-7 rounded-full bg-neutral-900/60 hover:bg-neutral-800/80 border border-white/5 flex items-center justify-center text-neutral-400 hover:text-white transition-all non-draggable"
+                                                      title={isPaused ? "Resume" : "Pause"}
                                                 >
                                                       {isPaused ? (
-                                                            <Play className="w-4 h-4 text-white fill-white" strokeWidth={0} />
+                                                            <Play className="w-2.5 h-2.5 fill-white" strokeWidth={0} />
                                                       ) : (
-                                                            <Pause className="w-4 h-4 text-white" strokeWidth={2} />
+                                                            <Pause className="w-2.5 h-2.5 text-white" strokeWidth={2} />
                                                       )}
                                                 </motion.button>
 
+                                                {/* Stop Button */}
                                                 <motion.button
-                                                      whileHover={{ scale: 1.05 }}
-                                                      whileTap={{ scale: 0.95 }}
+                                                      whileHover={{ scale: 1.08 }}
+                                                      whileTap={{ scale: 0.92 }}
                                                       onClick={handleStop}
-                                                      className="w-10 h-10 rounded-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 flex items-center justify-center transition-all group non-draggable"
+                                                      className="w-7 h-7 rounded-full bg-red-500/20 hover:bg-red-500/35 border border-red-500/30 flex items-center justify-center text-red-400 hover:text-red-300 transition-all non-draggable"
+                                                      title="Stop"
                                                 >
-                                                      <Square className="w-4 h-4 text-red-400 fill-red-400" strokeWidth={0} />
+                                                      <Square className="w-2.5 h-2.5 fill-red-400" strokeWidth={0} />
                                                 </motion.button>
-                                          </>
-                                    ) : (
-                                          <>
-                                                <div className="flex items-center gap-2">
-                                                      <motion.button
-                                                            whileHover={{ scale: 1.05 }}
-                                                            whileTap={{ scale: 0.95 }}
-                                                            onClick={handleVoiceClick}
-                                                            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center transition-all group non-draggable"
-                                                            title={t.voiceRecord}
-                                                      >
-                                                            <Mic className="w-5 h-5 text-white/70 group-hover:text-white" strokeWidth={1.5} />
-                                                      </motion.button>
+                                          </div>
+                                    </>
+                              ) : (
+                                    <>
+                                          {/* App Logo on the left */}
+                                          <div className="flex items-center pl-1">
+                                                <span className="text-sm select-none filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">🦆</span>
+                                          </div>
 
-                                                      <motion.button
-                                                            whileHover={{ scale: 1.05 }}
-                                                            whileTap={{ scale: 0.95 }}
-                                                            onClick={handleCameraClick}
-                                                            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center transition-all group non-draggable"
-                                                            title={t.capture}
-                                                      >
-                                                            <Camera className="w-5 h-5 text-white/70 group-hover:text-white" strokeWidth={1.5} />
-                                                      </motion.button>
-                                                </div>
-                                          </>
-                                    )}
-                              </div>
-                        </div>
+                                          {/* Action Buttons on the right */}
+                                          <div className="flex items-center gap-1.5 pr-1">
+                                                {/* Screenshot Button */}
+                                                <motion.button
+                                                      whileHover={{ scale: 1.08 }}
+                                                      whileTap={{ scale: 0.92 }}
+                                                      onClick={handleCameraClick}
+                                                      className="w-7 h-7 rounded-full bg-neutral-900/60 hover:bg-neutral-800/80 border border-white/5 flex items-center justify-center text-neutral-400 hover:text-white transition-all group non-draggable"
+                                                      title="Screenshot"
+                                                >
+                                                      <Camera className="w-3.5 h-3.5" strokeWidth={2} />
+                                                </motion.button>
 
-                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 flex gap-1 p-2 cursor-move" style={{ WebkitAppRegion: 'drag' }}>
-                              <div className="w-1 h-1 rounded-full bg-white/20" />
-                              <div className="w-1 h-1 rounded-full bg-white/20" />
-                              <div className="w-1 h-1 rounded-full bg-white/20" />
+                                                {/* Voice Recording Button */}
+                                                <motion.button
+                                                      whileHover={{ scale: 1.08 }}
+                                                      whileTap={{ scale: 0.92 }}
+                                                      onClick={handleVoiceClick}
+                                                      className="w-7 h-7 rounded-full bg-neutral-900/60 hover:bg-neutral-800/80 border border-white/5 flex items-center justify-center text-neutral-400 hover:text-amber-500 transition-all group non-draggable"
+                                                      title="Record Voice"
+                                                >
+                                                      <Mic className="w-3.5 h-3.5" strokeWidth={2} />
+                                                </motion.button>
+
+                                                {/* Return to Dashboard Button */}
+                                                <motion.button
+                                                      whileHover={{ scale: 1.08 }}
+                                                      whileTap={{ scale: 0.92 }}
+                                                      onClick={handleReturnToDashboard}
+                                                      className="w-7 h-7 rounded-full bg-neutral-900/60 hover:bg-neutral-800/80 border border-white/5 flex items-center justify-center text-neutral-400 hover:text-white transition-all group non-draggable"
+                                                      title="Return to Dashboard"
+                                                >
+                                                      <Home className="w-3.5 h-3.5" strokeWidth={2} />
+                                                </motion.button>
+                                          </div>
+                                    </>
+                              )}
                         </div>
                   </motion.div>
 
-                  {/* Mic Volume Slider - Show during recording */}
-                  <AnimatePresence>
-                        {isRecording && (
-                              <motion.div
-                                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="mt-3 bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-xl px-3 py-2 shadow-xl"
-                              >
-                                    <div className="flex items-center gap-2">
-                                          <button
-                                                onClick={() => setMicVolume(micVolume > 0 ? 0 : 1)}
-                                                className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors non-draggable"
-                                                title="Microphone"
-                                          >
-                                                {micVolume > 0 ? (
-                                                      <Mic className="w-3 h-3 text-amber-500" />
-                                                ) : (
-                                                      <VolumeX className="w-3 h-3 text-neutral-500" />
-                                                )}
-                                          </button>
-                                          <input
-                                                type="range"
-                                                min="0"
-                                                max="1"
-                                                step="0.01"
-                                                value={micVolume}
-                                                onChange={(e) => setMicVolume(parseFloat(e.target.value))}
-                                                className="w-20 h-1 bg-white/10 rounded-full appearance-none cursor-pointer non-draggable
-                                                      [&::-webkit-slider-thumb]:appearance-none
-                                                      [&::-webkit-slider-thumb]:w-2.5
-                                                      [&::-webkit-slider-thumb]:h-2.5
-                                                      [&::-webkit-slider-thumb]:rounded-full
-                                                      [&::-webkit-slider-thumb]:bg-amber-500
-                                                      [&::-webkit-slider-thumb]:cursor-pointer
-                                                      [&::-webkit-slider-thumb]:shadow-md
-                                                      [&::-webkit-slider-thumb]:shadow-amber-500/40"
-                                                style={{
-                                                      background: `linear-gradient(to right, #f59e0b ${micVolume * 100}%, rgba(255,255,255,0.1) ${micVolume * 100}%)`
-                                                }}
-                                          />
-                                    </div>
 
-                                    {/* System Audio Slider - Gray out if not supported (Windows only) */}
-                                    <div
-                                          className={`flex items-center gap-2 mt-2 pt-2 border-t border-white/5 transition-opacity ${!supportsSystemAudio ? 'opacity-40 grayscale' : ''}`}
-                                          title={!supportsSystemAudio ? "System audio recording is only available on Windows" : "System Audio"}
-                                    >
-                                          <button
-                                                disabled={!supportsSystemAudio}
-                                                onClick={() => setSystemVolume(systemVolume > 0 ? 0 : 1)}
-                                                className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors non-draggable disabled:cursor-not-allowed"
-                                          >
-                                                {systemVolume > 0 ? (
-                                                      <Monitor className="w-3 h-3 text-blue-400" />
-                                                ) : (
-                                                      <VolumeX className="w-3 h-3 text-neutral-500" />
-                                                )}
-                                          </button>
-                                          <input
-                                                disabled={!supportsSystemAudio}
-                                                type="range"
-                                                min="0"
-                                                max="1"
-                                                step="0.01"
-                                                value={systemVolume}
-                                                onChange={(e) => setSystemVolume(parseFloat(e.target.value))}
-                                                className="w-20 h-1 bg-white/10 rounded-full appearance-none cursor-pointer non-draggable disabled:cursor-not-allowed
-                                                      [&::-webkit-slider-thumb]:appearance-none
-                                                      [&::-webkit-slider-thumb]:w-2.5
-                                                      [&::-webkit-slider-thumb]:h-2.5
-                                                      [&::-webkit-slider-thumb]:rounded-full
-                                                      [&::-webkit-slider-thumb]:bg-blue-400
-                                                      [&::-webkit-slider-thumb]:cursor-pointer
-                                                      [&::-webkit-slider-thumb]:shadow-md
-                                                      [&::-webkit-slider-thumb]:shadow-blue-400/40"
-                                                style={{
-                                                      background: `linear-gradient(to right, #60a5fa ${systemVolume * 100}%, rgba(255,255,255,0.1) ${systemVolume * 100}%)`
-                                                }}
-                                          />
-                                    </div>
-                              </motion.div>
-                        )}
-                  </AnimatePresence>
 
                   <AnimatePresence>
                         {expanded && (isProcessing || transcriptionResult) && (
@@ -1036,22 +1088,6 @@ export default function OnRecordPage() {
                         )}
                   </AnimatePresence >
 
-                  < AnimatePresence >
-                        {!isRecording && (
-                              <motion.button
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -10 }}
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={handleReturnToDashboard}
-                                    className="mt-4 flex items-center gap-2 px-4 py-2 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/10 hover:border-amber-500/30 hover:bg-neutral-800/80 transition-all group"
-                              >
-                                    <Home className="w-4 h-4 text-neutral-400 group-hover:text-amber-400" strokeWidth={1.5} />
-                                    <span className="text-xs font-medium text-neutral-400 group-hover:text-amber-400">{t.overlay.returnDashboard}</span>
-                              </motion.button>
-                        )}
-                  </AnimatePresence >
-            </div >
+            </div>
       )
 }

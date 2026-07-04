@@ -5,7 +5,7 @@ const serve = require("electron-serve").default
 const db = require("./utils/db")
 const { registerIpcHandlers, setMainWindow, setOnRecordingWindow } = require("./ipcHandlers")
 const PROTOCOL_SCHEME = 'ducksy'
-const SERVER_URL = 'https://ducksy-gemini-3-hackathon-2026.onrender.com'
+const SERVER_URL = 'http://localhost:8080'
 const dotenv = require('dotenv')
 dotenv.config()
 const isProd = app.isPackaged
@@ -35,14 +35,15 @@ async function createOnRecordingWindow() {
             onRecordingWindow.focus()
             return
       }
-      const { width } = screen.getPrimaryDisplay().workAreaSize
-      const width_f = 450
-      const height_f = 250
+      const primaryDisplay = screen.getPrimaryDisplay()
+      const { width: screenWidth } = primaryDisplay.workAreaSize
+      const width_f = 432 // 400px notch + 16px arch on each side
+      const height_f = 40 // Start expanded static notch
       onRecordingWindow = new BrowserWindow({
             width: width_f,
             height: height_f,
             minWidth: width_f,
-            minHeight: height_f,
+            minHeight: 40,
             backgroundColor: "#00000000",
             title: "",
             autoHideMenuBar: true,
@@ -52,7 +53,7 @@ async function createOnRecordingWindow() {
             hasShadow: false,
             skipTaskbar: true,
             resizable: false,
-            movable: true,
+            movable: false,
             thickFrame: false,
             titleBarStyle: 'hidden',
             minimizable: false,
@@ -66,7 +67,8 @@ async function createOnRecordingWindow() {
       })
       onRecordingWindow.setMenu(null)
       setOnRecordingWindow(onRecordingWindow)
-      onRecordingWindow.setPosition(width - width_f - 20, 20)
+      onRecordingWindow.setPosition(Math.floor((screenWidth - width_f) / 2), 0)
+      onRecordingWindow.setAlwaysOnTop(true, "screen-saver")
       onRecordingWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       if (isProd) {
             await onRecordingWindow.loadURL("app://-/onRecord");
@@ -577,10 +579,18 @@ ipcMain.on("close-overlay", () => {
 })
 ipcMain.on("resize-recording-window", (event, { width, height }) => {
       if (onRecordingWindow && !onRecordingWindow.isDestroyed()) {
+            const primaryDisplay = screen.getPrimaryDisplay()
+            const { width: screenWidth } = primaryDisplay.workAreaSize
             const currentBounds = onRecordingWindow.getBounds()
             const newWidth = width || currentBounds.width
             const newHeight = height || currentBounds.height
-            onRecordingWindow.setSize(newWidth, newHeight, true)
+            const newX = Math.floor((screenWidth - newWidth) / 2)
+            onRecordingWindow.setBounds({
+                  x: newX,
+                  y: 0,
+                  width: newWidth,
+                  height: newHeight
+            }, true)
       }
 })
 ipcMain.handle("request-sizeCache", async (event) => {

@@ -1,4 +1,5 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
+const MODEL_ID = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const metrics = {
       latency: 0,
       tokensUsed: 0,
@@ -244,7 +245,7 @@ ${jsonStructure}
 `;
       let normalizedMimeType = mimeType.split(';')[0].trim()
       try {
-            const text = await generateContent(apiKey, process.env.model, [{
+            const text = await generateContent(apiKey, MODEL_ID, [{
                   parts: [
                         { inline_data: { mime_type: normalizedMimeType, data: base64Audio } },
                         { text: prompt }
@@ -292,7 +293,7 @@ ${jsonStructure}
 `;
       let normalizedMimeType = mimeType.split(';')[0].trim()
       try {
-            const text = await generateContent(apiKey, process.env.model, [{
+            const text = await generateContent(apiKey, MODEL_ID, [{
                   parts: [
                         { inline_data: { mime_type: normalizedMimeType, data: base64Image } },
                         { text: prompt }
@@ -355,7 +356,7 @@ Do not mention the JSON in your text response, just append it at the end.
             { role: "user", parts: [{ text: userMessage }] }
       ];
       try {
-            const text = await generateContent(apiKey, process.env.model, contents, {
+            const text = await generateContent(apiKey, MODEL_ID, contents, {
                   temperature: 0.7,
                   maxOutputTokens: 1000
             });

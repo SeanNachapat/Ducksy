@@ -115,6 +115,7 @@ export default function DashboardPage() {
       const [isDeleting, setIsDeleting] = useState(false)
       const [isDragging, setIsDragging] = useState(false)
       const [isProcessingFile, setIsProcessingFile] = useState(false)
+      const [databaseView, setDatabaseView] = useState('table')
       const fileInputRef = useRef(null)
       const [showCalendarModal, setShowCalendarModal] = useState(false)
       const [eventDate, setEventDate] = useState('')
@@ -378,230 +379,339 @@ export default function DashboardPage() {
                   setIsProcessingFile(false);
             }
       };
+      const formatDate = (dateString) => {
+            if (!dateString) return ""
+
+            let parsedDate = dateString
+            if (!dateString.includes('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+                  parsedDate = dateString.replace(' ', 'T') + 'Z'
+            }
+            const date = new Date(parsedDate)
+            const now = new Date()
+            const diff = now - date
+
+            const minutes = Math.floor(diff / (1000 * 60))
+            const hours = Math.floor(diff / (1000 * 60 * 60))
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+            if (minutes < 1) return t.sessionsPage?.justNow || "Just now"
+            if (minutes < 60) return `${minutes} ${minutes === 1 ? (t.sessionsPage?.minuteAgo || "minute ago") : (t.sessionsPage?.minutesAgo || "minutes ago")}`
+            if (hours < 24) return `${hours} ${hours === 1 ? (t.sessionsPage?.hourAgo || "hour ago") : (t.sessionsPage?.hoursAgo || "hours ago")}`
+            if (days === 1) return t.yesterday || "Yesterday"
+            if (days < 7) return `${days} ${t.sessionsPage?.daysAgo || "days ago"}`
+            return date.toLocaleDateString()
+      }
+
       return (
-            <div className="flex h-full w-full relative bg-neutral-950 text-white font-sans overflow-hidden selection:bg-amber-500/30">
-                  <div className="absolute inset-0 bg-linear-to-b from-neutral-900 via-neutral-950 to-black pointer-events-none z-0" />
-                  <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-amber-500/5 blur-[120px] rounded-full pointer-events-none z-0" />
-                  <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-amber-400/3 blur-[100px] rounded-full pointer-events-none z-0" />
-                  <aside className="w-20 border-r border-white/5 flex flex-col items-center py-6 z-20 bg-neutral-900/30 backdrop-blur-md">
-                        <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center mb-8 hover:bg-white/10 transition-colors cursor-pointer group">
-                              <Layers className="w-5 h-5 text-neutral-500 group-hover:text-amber-400 transition-colors" />
+            <div className="flex-1 flex flex-col h-full bg-[#202020] text-neutral-200 font-sans overflow-y-auto custom-scrollbar selection:bg-amber-500/30 relative">
+                  {/* Notion-style Cover Banner */}
+                  <div className="relative w-full h-44 bg-gradient-to-r from-[#1f1f1f] via-[#2d2218] to-[#1f1f1f] border-b border-white/5 shrink-0">
+                        {/* Mesh gradients / glowing orbs */}
+                        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-80 h-28 bg-amber-500/5 rounded-full blur-[60px] pointer-events-none" />
+                        <div className="absolute top-1/3 right-1/4 -translate-y-1/2 w-64 h-24 bg-orange-500/5 rounded-full blur-[50px] pointer-events-none" />
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(251,191,36,0.06),transparent_50%)] pointer-events-none" />
+                  </div>
+
+                  {/* Overlapping Page Emoji */}
+                  <div className="max-w-5xl w-full mx-auto px-8 relative -mt-10 mb-4 z-10 select-none">
+                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#202020] border border-white/5 text-4xl shadow-lg hover:scale-105 transition-transform duration-300">
+                              🦆
                         </div>
-                        <div className="mt-auto flex flex-col gap-6 items-center pb-6">
-                              <div className="relative group flex items-center justify-center">
-                                    <Link href="/configure">
-                                          <button
-                                                className="w-10 h-10 rounded-full bg-transparent border border-white/10 flex items-center justify-center text-neutral-500 hover:text-amber-400 hover:border-amber-400/50 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all duration-300 group-hover:scale-105"
-                                                aria-label="Configure Agent"
-                                          >
-                                                <SlidersHorizontal className="w-5 h-5" strokeWidth={1.5} />
-                                          </button>
-                                    </Link>
-                                    <span className="absolute left-full ml-4 px-2 py-1 bg-neutral-900 border border-white/10 rounded-md text-xs text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-md z-50">
-                                          {t.dashboardPage.configureAgent}
-                                    </span>
+                  </div>
+
+                  {/* Main Document Content Canvas */}
+                  <div className="max-w-5xl w-full mx-auto px-8 pb-16 space-y-8 flex-1 flex flex-col z-10">
+                        {/* Page Title Header */}
+                        <div className="space-y-1">
+                              <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+                                    {t.dashboard || "Dashboard"}
+                              </h1>
+                              <p className="text-xs text-neutral-500 font-medium">
+                                    Welcome to your Ducksy AI Workspace. Use the sidebar to navigate, or upload logs and capture screen context.
+                              </p>
+                        </div>
+
+                        {/* Notion Callout Blocks (Metrics & Audio) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Callout 1: System Status & Metrics */}
+                              <div className="flex gap-3.5 p-4 rounded-xl border border-l-4 border-white/5 border-l-amber-500/50 bg-[#272727]/30 backdrop-blur-md">
+                                    <div className="text-xl select-none">⚡</div>
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                          <h3 className="text-[10px] font-bold font-mono uppercase tracking-wider text-neutral-500 leading-none">System Metrics</h3>
+                                          <LiveSystemMetrics />
+                                    </div>
+                              </div>
+                              
+                              {/* Callout 2: Voice & Device Selection */}
+                              <div className="flex gap-3.5 p-4 rounded-xl border border-l-4 border-white/5 border-l-amber-500/50 bg-[#272727]/30 backdrop-blur-md">
+                                    <div className="text-xl select-none">🎤</div>
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                          <h3 className="text-[10px] font-bold font-mono uppercase tracking-wider text-neutral-500 leading-none">Audio Device</h3>
+                                          <div className="flex items-center h-full">
+                                                <MicDevice setMicDevice={setMicDevice} micDevice={micDevice} />
+                                          </div>
+                                    </div>
                               </div>
                         </div>
-                  </aside>
-                  <main className="flex-1 flex flex-col relative overflow-hidden z-10 transition-all duration-300">
-                        <header className="h-24 px-8 flex items-center justify-between border-b border-white/5 bg-neutral-950/50 backdrop-blur-xl relative z-50">
-                              <div>
-                                    <DashboardSearch onSelectSession={setSelectedSession} />
+
+                        {/* Top Controls Grid: Launch Overlay / File Upload / Up Next */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                              {/* Quick Action: Launch Overlay */}
+                              <div className="bg-[#272727]/30 border border-white/5 rounded-2xl p-5 flex flex-col justify-between h-44 hover:border-white/10 hover:bg-[#272727]/40 transition-all group">
+                                    <div className="space-y-1">
+                                          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block leading-none">Capture Overlay</span>
+                                          <h3 className="text-sm font-bold text-neutral-200 group-hover:text-amber-400 transition-colors">Go Invisible</h3>
+                                          <p className="text-xs text-neutral-500 leading-normal">
+                                                Minimize dashboard to system tray and launch the desktop overlay companion on your screen.
+                                          </p>
+                                    </div>
+                                    <button
+                                          onClick={() => {
+                                                if (typeof window !== 'undefined' && window.electron) {
+                                                      window.electron.send('open-overlay')
+                                                }
+                                          }}
+                                          className="w-full py-2 bg-amber-500 text-neutral-950 text-xs font-bold rounded-xl hover:bg-amber-400 transition-colors shadow-sm mt-2 flex items-center justify-center gap-1.5"
+                                    >
+                                          <Zap className="w-3.5 h-3.5 fill-current" strokeWidth={0} />
+                                          {t.dashboardPage.launchOverlay}
+                                    </button>
                               </div>
-                              <div className="flex items-center gap-6">
-                                    <LiveSystemMetrics />
-                                    <MicDevice setMicDevice={setMicDevice} micDevice={micDevice} />
-                              </div>
-                        </header>
-                        <div className="flex-1 overflow-hidden p-8">
-                              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-                                    <div className="lg:col-span-4 flex flex-col gap-6 h-full">
-                                          <motion.button
-                                                whileHover={{ scale: 1.01, backgroundColor: "rgb(251 191 36)" }}
-                                                whileTap={{ scale: 0.99 }}
-                                                onClick={() => {
-                                                      if (typeof window !== 'undefined' && window.electron) {
-                                                            window.electron.send('open-overlay')
-                                                      }
-                                                }}
-                                                className="group w-full h-36 rounded-3xl bg-amber-500 flex flex-col items-center justify-center relative overflow-hidden transition-all shadow-[0_0_40px_-10px_rgba(245,158,11,0.3)] border border-amber-400/20"
-                                          >
-                                                <div className="relative z-10 flex flex-col items-center gap-3">
-                                                      <div className="w-14 h-14 rounded-2xl bg-black/10 flex items-center justify-center text-neutral-950 backdrop-blur-md border border-black/5">
-                                                            <Zap className="w-6 h-6 fill-neutral-950" strokeWidth={0} />
-                                                      </div>
-                                                      <div className="text-center">
-                                                            <span className="block text-lg font-bold text-neutral-950 tracking-tight leading-none font-sans">{t.dashboardPage.goInvisible}</span>
-                                                            <span className="text-[10px] font-mono text-neutral-900/60 uppercase tracking-[0.2em] mt-1 block">{t.dashboardPage.launchOverlay}</span>
-                                                      </div>
+
+                              {/* Notion Drag & Drop Media Box */}
+                              <div 
+                                    className={`border border-dashed rounded-2xl p-5 h-44 flex flex-col items-center justify-center text-center transition-all cursor-pointer select-none group/dropzone
+                                    ${isDragging
+                                          ? 'border-amber-500 bg-amber-500/10'
+                                          : 'border-white/10 bg-[#272727]/10 hover:border-amber-500/30 hover:bg-[#272727]/30'
+                                    }`}
+                                    onDrop={handleDrop}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onClick={() => fileInputRef.current?.click()}
+                              >
+                                    <input
+                                          type="file"
+                                          ref={fileInputRef}
+                                          className="hidden"
+                                          onChange={handleFileSelect}
+                                          accept="audio/*,image/*"
+                                    />
+                                    {isProcessingFile ? (
+                                          <div className="flex flex-col items-center">
+                                                <Loader2 className="w-6 h-6 text-amber-500 animate-spin mb-2" />
+                                                <span className="text-xs text-amber-500 font-medium animate-pulse">Processing...</span>
+                                          </div>
+                                    ) : (
+                                          <div className="flex flex-col items-center">
+                                                <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover/dropzone:scale-105 transition-transform text-neutral-400 group-hover/dropzone:text-amber-500">
+                                                      <Upload className="w-4 h-4" strokeWidth={1.5} />
                                                 </div>
-                                          </motion.button>
-                                          <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-sm flex flex-col gap-6 flex-1">
-                                                <div className="flex flex-col flex-1">
-                                                      <div className="flex items-center justify-between mb-4">
-                                                            <h2 className="text-xs font-mono text-neutral-500 uppercase tracking-widest">{t.dashboardPage.upNext}</h2>
-                                                            <Calendar className="w-4 h-4 text-neutral-600" />
-                                                      </div>
-                                                      <div className="max-h-[220px] overflow-y-auto pr-2 custom-scrollbar space-y-3">
-                                                            {suggestedEvents.length > 0 ? (
-                                                                  suggestedEvents.map(eventData => (
-                                                                        <div id={`calendar-event-${eventData.id}`} key={eventData.id}>
-                                                                              <CalendarEventCard
-                                                                                    event={eventData}
-                                                                                    t={t}
-                                                                                    onReview={() => setEditingEvent({
-                                                                                          calendarEvent: eventData,
-                                                                                          actionItemIndex: eventData.actionItemIndex,
-                                                                                          parentFileId: eventData.parentFileId
-                                                                                    })}
-                                                                                    onDismiss={() => handleDismissCalendarEvent(eventData.parentFileId, eventData.actionItemIndex)}
-                                                                              />
-                                                                        </div>
-                                                                  ))
-                                                            ) : (
-                                                                  <div className="text-xs text-neutral-500 italic p-4 text-center border border-white/5 rounded-2xl bg-white/5">
-                                                                        {t.dashboardPage?.noUpcomingEvents || "No new events detected"}
-                                                                  </div>
-                                                            )}
-                                                      </div>
-                                                      <div
-                                                            className={`mt-auto border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center text-center transition-all cursor-pointer relative overflow-hidden group/dropzone
-                                                            ${isDragging
-                                                                        ? 'border-amber-500 bg-amber-500/10'
-                                                                        : 'border-white/10 bg-white/2 hover:border-amber-500/30 hover:bg-amber-500/5'
-                                                                  }`}
-                                                            onDrop={handleDrop}
-                                                            onDragOver={handleDragOver}
-                                                            onDragLeave={handleDragLeave}
-                                                            onClick={() => fileInputRef.current?.click()}
-                                                      >
-                                                            <input
-                                                                  type="file"
-                                                                  ref={fileInputRef}
-                                                                  className="hidden"
-                                                                  onChange={handleFileSelect}
-                                                                  accept="audio/*,image/*"
+                                                <span className="text-xs text-neutral-300 font-semibold group-hover/dropzone:text-neutral-200">
+                                                      Drop audio or image
+                                                </span>
+                                                <span className="text-[10px] text-neutral-500 mt-1">
+                                                      or click to upload
+                                                </span>
+                                          </div>
+                                    )}
+                              </div>
+
+                              {/* Up Next / Calendar Suggestions */}
+                              <div className="bg-[#272727]/30 border border-white/5 rounded-2xl p-5 flex flex-col h-44">
+                                    <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-1.5 shrink-0">
+                                          <h2 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest leading-none">{t.dashboardPage.upNext}</h2>
+                                          <Calendar className="w-3.5 h-3.5 text-neutral-600" />
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
+                                          {suggestedEvents.length > 0 ? (
+                                                suggestedEvents.map(eventData => (
+                                                      <div id={`calendar-event-${eventData.id}`} key={eventData.id}>
+                                                            <CalendarEventCard
+                                                                  event={eventData}
+                                                                  t={t}
+                                                                  onReview={() => setEditingEvent({
+                                                                        calendarEvent: eventData,
+                                                                        actionItemIndex: eventData.actionItemIndex,
+                                                                        parentFileId: eventData.parentFileId
+                                                                  })}
+                                                                  onDismiss={() => handleDismissCalendarEvent(eventData.parentFileId, eventData.actionItemIndex)}
                                                             />
-                                                            {isProcessingFile ? (
-                                                                  <div className="flex flex-col items-center py-2">
-                                                                        <Loader2 className="w-6 h-6 text-amber-500 animate-spin mb-2" />
-                                                                        <span className="text-xs text-amber-500 font-medium animate-pulse">Processing file...</span>
-                                                                  </div>
-                                                            ) : (
-                                                                  <div className="flex flex-col items-center py-1">
-                                                                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover/dropzone:scale-110 transition-transform text-neutral-400 group-hover/dropzone:text-amber-500">
-                                                                              <Upload className="w-5 h-5" strokeWidth={1.5} />
-                                                                        </div>
-                                                                        <span className="text-xs text-neutral-400 font-medium group-hover/dropzone:text-neutral-200 transition-colors">
-                                                                              Drop audio or image here
-                                                                        </span>
-                                                                        <span className="text-[10px] text-neutral-600 mt-0.5">
-                                                                              or click to browse
-                                                                        </span>
-                                                                  </div>
-                                                            )}
                                                       </div>
+                                                ))
+                                          ) : (
+                                                <div className="text-[11px] text-neutral-500 italic p-3 text-center border border-white/5 rounded-xl bg-white/[0.01] h-full flex items-center justify-center">
+                                                      {t.dashboardPage?.noUpcomingEvents || "No new events detected"}
                                                 </div>
-                                          </div>
-                                    </div>
-                                    <div className="lg:col-span-8 flex flex-col h-full overflow-hidden">
-                                          <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-8 flex-1 flex flex-col backdrop-blur-sm relative overflow-hidden">
-                                                <div className="flex items-center justify-between mb-8 z-10 relative">
-                                                      <div className="flex items-center gap-3">
-                                                            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
-                                                                  <Activity className="w-4 h-4" />
-                                                            </div>
-                                                            <h2 className="text-lg font-medium text-white tracking-tight">{t.dashboardPage.sessionLog}</h2>
-                                                            {isLoading && (
-                                                                  <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
-                                                            )}
-                                                      </div>
-                                                      <div className="flex items-center gap-2">
-                                                            <button
-                                                                  onClick={refetch}
-                                                                  disabled={isLoading}
-                                                                  className="p-2 rounded-full hover:bg-white/5 text-neutral-500 hover:text-white transition-colors disabled:opacity-50"
-                                                            >
-                                                                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                                                            </button>
-                                                            <Link href="/sessions">
-                                                                  <button className="text-[10px] font-mono font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-[0.2em] border border-white/5 px-3 py-1.5 rounded-full hover:bg-white/5">
-                                                                        {t.viewAll}
-                                                                  </button>
-                                                            </Link>
-                                                      </div>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar z-10 relative">
-                                                      {isLoading && sessionLogs.length === 0 ? (
-                                                            <div className="flex flex-col items-center justify-center h-48">
-                                                                  <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-4" />
-                                                                  <p className="text-sm text-neutral-500">{t.session.loading}</p>
-                                                            </div>
-                                                      ) : error ? (
-                                                            <div className="flex flex-col items-center justify-center h-48 text-neutral-500">
-                                                                  <p className="text-sm mb-3">{t.session.loadFailed}</p>
-                                                                  <button
-                                                                        onClick={refetch}
-                                                                        className="text-xs text-amber-500 hover:underline flex items-center gap-2"
-                                                                  >
-                                                                        <RefreshCw className="w-3 h-3" />
-                                                                        {t.session.tryAgain}
-                                                                  </button>
-                                                            </div>
-                                                      ) : sessionLogs.length === 0 ? (
-                                                            <div className="flex flex-col items-center justify-center h-48 text-neutral-500">
-                                                                  <FileText className="w-10 h-10 mb-3 opacity-30" />
-                                                                  <p className="text-sm font-medium">{t.session.noSessions}</p>
-                                                                  <p className="text-xs mt-1 text-neutral-600">{t.session.noSessionsDesc}</p>
-                                                            </div>
-                                                      ) : (
-                                                            sessionLogs.map((log) => (
-                                                                  <div
-                                                                        key={log.id}
-                                                                        onClick={() => setSelectedSession(log)}
-                                                                        className="group flex items-center p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.05] transition-all cursor-pointer"
-                                                                  >
-                                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 
-                                                                              ${log.type === 'summary' ? 'bg-blue-500/10 text-blue-400' :
-                                                                                    log.type === 'debug' ? 'bg-red-500/10 text-red-400' :
-                                                                                          'bg-amber-500/10 text-amber-400'}`}
-                                                                        >
-                                                                              {log.type === 'summary' && <FileText className="w-4 h-4" strokeWidth={1.5} />}
-                                                                              {log.type === 'debug' && <Bug className="w-4 h-4" strokeWidth={1.5} />}
-                                                                        </div>
-                                                                        <div className="ml-5 flex-1 min-w-0">
-                                                                              <h3 className="text-neutral-200 font-medium truncate text-sm">{log.title}</h3>
-                                                                              <p className="text-xs text-neutral-500 mt-1 font-medium">{log.subtitle}</p>
-                                                                        </div>
-                                                                        { }
-                                                                        {log.transcriptionStatus === 'processing' && (
-                                                                              <div className="mr-2">
-                                                                                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                                                                              </div>
-                                                                        )}
-                                                                        {log.transcriptionStatus === 'pending' && (
-                                                                              <div className="mr-2">
-                                                                                    <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                                                                              </div>
-                                                                        )}
-                                                                        {log.transcriptionStatus === 'failed' && (
-                                                                              <div className="mr-2">
-                                                                                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                                                                              </div>
-                                                                        )}
-                                                                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-700 group-hover:text-white transition-all ml-2 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transform duration-200">
-                                                                              <ChevronRight className="w-4 h-4" />
-                                                                        </div>
-                                                                  </div>
-                                                            ))
-                                                      )}
-                                                </div>
-                                                <div className="absolute bottom-0 left-0 right-0 h-24 bg-linear-to-t from-neutral-950/80 to-transparent pointer-events-none" />
-                                          </div>
+                                          )}
                                     </div>
                               </div>
                         </div>
-                  </main>
+
+                        {/* Notion Database Block */}
+                        <div className="bg-[#272727]/20 border border-white/5 rounded-2xl p-6 space-y-4">
+                              {/* Database Toolbar */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+                                    <div className="flex items-center gap-3">
+                                          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                                                <Activity className="w-4 h-4" />
+                                          </div>
+                                          <div>
+                                                <h2 className="text-sm font-bold text-neutral-200">{t.dashboardPage.sessionLog}</h2>
+                                                <p className="text-[10px] text-neutral-500">Showing recent system interactions</p>
+                                          </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                                          {/* View Selector */}
+                                          <div className="flex items-center gap-1 bg-neutral-900/40 rounded-lg p-0.5 border border-white/5">
+                                                <button
+                                                      onClick={() => setDatabaseView('table')}
+                                                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${databaseView === 'table' ? 'bg-white/5 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                                                >
+                                                      Table
+                                                </button>
+                                                <button
+                                                      onClick={() => setDatabaseView('gallery')}
+                                                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${databaseView === 'gallery' ? 'bg-white/5 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                                                >
+                                                      Gallery
+                                                </button>
+                                          </div>
+
+                                          <span className="w-px h-4 bg-white/10" />
+
+                                          <button
+                                                onClick={refetch}
+                                                disabled={isLoading}
+                                                className="p-1.5 rounded-lg hover:bg-white/5 text-neutral-500 hover:text-white transition-colors disabled:opacity-50"
+                                          >
+                                                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                                          </button>
+
+                                          <Link href="/sessions">
+                                                <button className="text-[9px] font-bold font-mono text-neutral-500 hover:text-white transition-colors uppercase tracking-widest border border-white/5 px-2.5 py-1.5 rounded-lg hover:bg-white/5">
+                                                      {t.viewAll}
+                                                </button>
+                                          </Link>
+                                    </div>
+                              </div>
+
+                              {/* Database Content Area */}
+                              <div className="min-h-[220px]">
+                                    {isLoading && sessionLogs.length === 0 ? (
+                                          <div className="flex flex-col items-center justify-center py-16">
+                                                <Loader2 className="w-7 h-7 text-amber-500 animate-spin mb-3" />
+                                                <p className="text-xs text-neutral-500">{t.session.loading}</p>
+                                          </div>
+                                    ) : error ? (
+                                          <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+                                                <p className="text-xs mb-2">{t.session.loadFailed}</p>
+                                                <button
+                                                      onClick={refetch}
+                                                      className="text-xs text-amber-500 hover:underline flex items-center gap-1.5"
+                                                >
+                                                      <RefreshCw className="w-3.5 h-3.5" />
+                                                      {t.session.tryAgain}
+                                                </button>
+                                          </div>
+                                    ) : sessionLogs.length === 0 ? (
+                                          <div className="flex flex-col items-center justify-center py-16 text-neutral-500 text-center">
+                                                <FileText className="w-9 h-9 mb-2 opacity-30" />
+                                                <p className="text-xs font-semibold">{t.session.noSessions}</p>
+                                                <p className="text-[10px] mt-0.5 text-neutral-600">{t.session.noSessionsDesc}</p>
+                                          </div>
+                                    ) : databaseView === 'table' ? (
+                                          /* Notion Table View */
+                                          <div className="overflow-x-auto">
+                                                <table className="w-full text-left text-xs border-collapse">
+                                                      <thead>
+                                                            <tr className="border-b border-white/5 text-neutral-500 font-bold text-[10px] uppercase tracking-wider">
+                                                                  <th className="pb-2.5 font-normal pl-2">Title</th>
+                                                                  <th className="pb-2.5 font-normal">Subtitle</th>
+                                                                  <th className="pb-2.5 font-normal">Type</th>
+                                                                  <th className="pb-2.5 font-normal pr-2">Status</th>
+                                                            </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-white/[0.03]">
+                                                            {sessionLogs.map((log) => (
+                                                                  <tr 
+                                                                        key={log.id} 
+                                                                        onClick={() => setSelectedSession(log)} 
+                                                                        className="hover:bg-white/[0.02] cursor-pointer transition-colors group"
+                                                                  >
+                                                                        <td className="py-3 font-semibold text-neutral-200 truncate max-w-[200px] pl-2 flex items-center gap-2">
+                                                                              <span className="shrink-0 text-sm">
+                                                                                    {log.type === 'summary' ? '📄' : log.type === 'debug' ? '🐞' : '🖼️'}
+                                                                              </span>
+                                                                              <span className="truncate group-hover:text-amber-400 transition-colors">
+                                                                                    {log.title}
+                                                                              </span>
+                                                                        </td>
+                                                                        <td className="py-3 text-neutral-500 truncate max-w-[240px]">
+                                                                              {log.subtitle}
+                                                                        </td>
+                                                                        <td className="py-3">
+                                                                              <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold font-mono tracking-wider
+                                                                                    ${log.type === 'summary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                                                      log.type === 'debug' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                                                      'bg-purple-500/10 text-purple-400 border border-purple-500/20'}`}
+                                                                              >
+                                                                                    {log.type}
+                                                                              </span>
+                                                                        </td>
+                                                                        <td className="py-3 pr-2">
+                                                                              <div className="flex items-center justify-between">
+                                                                                    {getStatusBadge(log.transcriptionStatus)}
+                                                                                    <ChevronRight className="w-3.5 h-3.5 text-neutral-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                                                                              </div>
+                                                                        </td>
+                                                                  </tr>
+                                                            ))}
+                                                      </tbody>
+                                                </table>
+                                          </div>
+                                    ) : (
+                                          /* Notion Gallery View */
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                                {sessionLogs.map((log) => (
+                                                      <div 
+                                                            key={log.id} 
+                                                            onClick={() => setSelectedSession(log)} 
+                                                            className="p-4 rounded-xl bg-neutral-900/30 border border-white/5 hover:border-white/10 hover:bg-neutral-900/40 cursor-pointer transition-all flex flex-col justify-between h-36 group"
+                                                      >
+                                                            <div>
+                                                                  <div className="flex items-center justify-between mb-2">
+                                                                        <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold font-mono tracking-wider
+                                                                              ${log.type === 'summary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                                                log.type === 'debug' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                                                'bg-purple-500/10 text-purple-400 border border-purple-500/20'}`}
+                                                                        >
+                                                                              {log.type}
+                                                                        </span>
+                                                                        {getStatusBadge(log.transcriptionStatus)}
+                                                                  </div>
+                                                                  <h3 className="text-xs font-bold text-neutral-200 truncate group-hover:text-amber-400 transition-colors">
+                                                                        {log.title}
+                                                                  </h3>
+                                                                  <p className="text-[11px] text-neutral-500 line-clamp-2 mt-1.5 leading-normal">
+                                                                        {log.subtitle}
+                                                                  </p>
+                                                            </div>
+                                                            <div className="flex items-center justify-between text-[9px] text-neutral-600 font-mono mt-3 border-t border-white/5 pt-1.5">
+                                                                  <span>{formatDate(log.createdAt)}</span>
+                                                                  <span className="flex items-center gap-0.5 text-neutral-500 group-hover:text-neutral-300">
+                                                                        Open <ChevronRight className="w-2.5 h-2.5" />
+                                                                  </span>
+                                                            </div>
+                                                      </div>
+                                                ))}
+                                          </div>
+                                    )}
+                              </div>
+                        </div>
+                  </div>
+
                   <EditableEventModal
                         isOpen={!!editingEvent}
                         onClose={() => setEditingEvent(null)}
@@ -609,6 +719,7 @@ export default function DashboardPage() {
                         onConfirm={handleConfirmCalendarEvent}
                         t={t}
                   />
+
                   <AnimatePresence>
                         {selectedSession && (
                               <>
@@ -617,14 +728,14 @@ export default function DashboardPage() {
                                           animate={{ opacity: 1 }}
                                           exit={{ opacity: 0 }}
                                           onClick={() => setSelectedSession(null)}
-                                          className="absolute inset-0 bg-black/40 backdrop-blur-sm z-40"
+                                          className="absolute inset-0 bg-black/40 backdrop-blur-sm z-45"
                                     />
                                     <motion.div
                                           initial={{ x: "100%" }}
                                           animate={{ x: 0 }}
                                           exit={{ x: "100%" }}
                                           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                          className="absolute top-0 right-0 h-full w-full md:w-1/3 min-w-[350px] bg-neutral-950/95 backdrop-blur-xl border-l border-white/10 z-50 shadow-2xl overflow-hidden flex flex-col"
+                                          className="absolute top-0 right-0 h-full w-full md:w-1/3 min-w-[350px] bg-[#202020] border-l border-white/10 z-50 shadow-2xl overflow-hidden flex flex-col"
                                     >
                                           <div className="p-6 border-b border-white/5 flex items-start justify-between bg-neutral-900/30">
                                                 <div>
@@ -701,145 +812,119 @@ export default function DashboardPage() {
                                                                               }
                                                                         }
                                                                   }}
-                                                                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-black text-xs font-bold rounded-lg hover:bg-amber-400 transition-colors"
+                                                                  className="px-6 py-2.5 bg-neutral-800 text-white hover:bg-neutral-700 rounded-xl text-xs font-semibold transition-colors border border-white/5"
                                                             >
-                                                                  <RefreshCw className="w-4 h-4" />
-                                                                  {t.session?.retryAnalysis || "Retry Analysis"}
+                                                                  {t.session.retry}
                                                             </button>
                                                       </div>
                                                 )}
-                                                {selectedSession.transcriptionStatus === 'completed' && (
+                                                {selectedSession.transcriptionStatus === 'completed' && selectedSession.details && (
                                                       <>
                                                             {selectedSession.type === 'summary' && (
                                                                   <div className="space-y-6">
                                                                         <div>
-                                                                              <h4 className="text-xs font-mono text-neutral-500 uppercase tracking-widest mb-3">{t.dashboardPage.meetingTopic}</h4>
-                                                                              <p className="text-neutral-300 leading-relaxed font-light">{selectedSession.details.topic}</p>
+                                                                              <h4 className="text-xs font-mono text-neutral-500 uppercase tracking-widest mb-2">{t.dashboardPage.summary}</h4>
+                                                                              <p className="text-neutral-300 text-sm leading-relaxed">{selectedSession.details.summary}</p>
                                                                         </div>
                                                                         <div>
-                                                                              <h4 className="text-xs font-mono text-neutral-500 uppercase tracking-widest mb-3">{t.dashboardPage.summary}</h4>
-                                                                              <p className="text-neutral-300 leading-relaxed font-light">{selectedSession.details.summary}</p>
-                                                                        </div>
-                                                                        <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-                                                                              <h4 className="text-xs font-mono text-amber-400 uppercase tracking-widest mb-3">{t.dashboardPage.actionItems}</h4>
-                                                                              <ul className="space-y-2">
+                                                                              <h4 className="text-xs font-mono text-neutral-500 uppercase tracking-widest mb-3">{t.dashboardPage.actionItems}</h4>
+                                                                              <ul className="space-y-2.5">
                                                                                     {(() => {
-                                                                                          const items = selectedSession.details.actionItems || [];
-                                                                                          const sortedItems = [...items].sort((a, b) => {
-                                                                                                const getStatus = (item) => {
-                                                                                                      const isPast = item.calendarEvent?.dateTime && new Date(item.calendarEvent.dateTime) < new Date();
-                                                                                                      const isDismissed = item.dismissed;
-                                                                                                      return (isDismissed || isPast) ? 1 : 0;
-                                                                                                };
-                                                                                                const statusA = getStatus(a);
-                                                                                                const statusB = getStatus(b);
-                                                                                                if (statusA !== statusB) return statusA - statusB;
-                                                                                                const dateA = a.calendarEvent?.dateTime ? new Date(a.calendarEvent.dateTime) : new Date(8640000000000000);
-                                                                                                const dateB = b.calendarEvent?.dateTime ? new Date(b.calendarEvent.dateTime) : new Date(8640000000000000);
-                                                                                                return dateA - dateB;
-                                                                                          });
-                                                                                          return sortedItems.map((item, i) => {
-                                                                                                const originalIndex = items.indexOf(item);
-                                                                                                const isObject = typeof item === 'object' && item !== null;
-                                                                                                const text = isObject ? (item.text || item.description || "") : String(item);
-                                                                                                const tool = isObject ? item.tool : null;
-                                                                                                const params = isObject ? item.parameters : {};
-                                                                                                const isPast = item.calendarEvent?.dateTime && new Date(item.calendarEvent.dateTime) < new Date();
-                                                                                                const isInactive = item?.dismissed || isPast;
+                                                                                          let itemIndex = 0;
+                                                                                          return selectedSession.details.actionItems?.map((item, originalIndex) => {
+                                                                                                const isInactive = item.dismissed || item.confirmed;
+                                                                                                const isEvent = item.type === 'event';
+                                                                                                const hasTool = item.toolCall && item.toolCall.tool;
+                                                                                                const tool = hasTool ? item.toolCall.tool : null;
+                                                                                                const params = hasTool ? item.toolCall.params : null;
+                                                                                                const iconIndex = itemIndex;
+                                                                                                if (!isInactive) {
+                                                                                                      itemIndex++;
+                                                                                                }
                                                                                                 return (
-                                                                                                      <li key={originalIndex} className={`flex items-start justify-between gap-4 text-sm text-neutral-300 bg-black/20 p-3 rounded-lg border border-white/5 hover:border-white/10 transition-colors group/item ${isInactive ? 'opacity-50' : ''}`}>
-                                                                                                            <div className="flex items-start gap-3 flex-1">
-                                                                                                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500/50 mt-1.5 shrink-0" />
-                                                                                                                  <div className="flex flex-col gap-1">
-                                                                                                                        {isObject && item.type === 'event' && (
-                                                                                                                              <div className="flex items-center gap-1.5 text-amber-500/80 mb-0.5">
-                                                                                                                                    <Calendar className="w-3 h-3" />
-                                                                                                                                    <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Event</span>
-                                                                                                                              </div>
-                                                                                                                        )}
-                                                                                                                        <p className={`leading-relaxed ${isInactive ? 'line-through' : ''}`}>{text}</p>
-                                                                                                                  </div>
+                                                                                                      <li 
+                                                                                                            key={originalIndex} 
+                                                                                                            className={`flex items-start gap-3 p-3.5 rounded-xl border border-white/5 transition-all
+                                                                                                                  ${isInactive 
+                                                                                                                        ? 'bg-neutral-900/10 border-transparent text-neutral-600' 
+                                                                                                                        : 'bg-[#272727]/20 text-neutral-200 hover:border-white/10 hover:bg-[#272727]/30'
+                                                                                                                  }`}
+                                                                                                      >
+                                                                                                            <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-xs font-mono font-bold mt-0.5
+                                                                                                                  ${isInactive ? 'bg-neutral-800 text-neutral-600' : 'bg-amber-500/10 text-amber-500'}`}
+                                                                                                            >
+                                                                                                                  {isInactive ? '✓' : iconIndex + 1}
                                                                                                             </div>
-                                                                                                            <div className="flex gap-2 shrink-0 mt-0.5">
-                                                                                                                  <button
-                                                                                                                        onClick={(e) => {
-                                                                                                                              e.stopPropagation()
-                                                                                                                              if (item?.confirmed || isInactive) return;
-                                                                                                                              let eventData = {};
-                                                                                                                              if (item.calendarEvent) {
-                                                                                                                                    eventData = {
-                                                                                                                                          ...item.calendarEvent,
-                                                                                                                                          detected: true
-                                                                                                                                    };
-                                                                                                                              } else {
-                                                                                                                                    const now = new Date()
-                                                                                                                                    now.setHours(now.getHours() + 1)
-                                                                                                                                    eventData = {
-                                                                                                                                          title: text,
-                                                                                                                                          description: `Action item from session: ${selectedSession.title}`,
-                                                                                                                                          dateTime: now.toISOString(),
-                                                                                                                                          detected: true
-                                                                                                                                    };
-                                                                                                                              }
-                                                                                                                              setEditingEvent({
-                                                                                                                                    calendarEvent: eventData,
-                                                                                                                                    actionItemIndex: originalIndex
-                                                                                                                              })
-                                                                                                                        }}
-                                                                                                                        disabled={item?.confirmed || isInactive}
-                                                                                                                        title={item?.confirmed ? "Confirmed" : item?.dismissed ? "Rejected" : isPast ? "Past Event" : "Add to Calendar"}
-                                                                                                                        className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${item?.confirmed
-                                                                                                                              ? 'bg-amber-500 border-amber-500 text-neutral-950 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                                                                                                                              : isInactive
-                                                                                                                                    ? 'bg-neutral-800/50 border-neutral-800 text-neutral-600 cursor-not-allowed'
-                                                                                                                                    : 'bg-transparent border-neutral-600 text-neutral-400 hover:border-amber-500 hover:text-amber-500 hover:bg-amber-500/10'
-                                                                                                                              }`}
-                                                                                                                  >
-                                                                                                                        <Plus className="w-4 h-4" strokeWidth={item?.confirmed ? 3 : 2} />
-                                                                                                                  </button>
-                                                                                                                  <button
-                                                                                                                        onClick={async (e) => {
-                                                                                                                              e.stopPropagation();
-                                                                                                                              if (item?.confirmed || isInactive) return;
-                                                                                                                              if (window.electron) {
-                                                                                                                                    await window.electron.invoke('calendar-dismiss-event', {
-                                                                                                                                          fileId: selectedSession.fileId || selectedSession.id,
-                                                                                                                                          index: originalIndex
-                                                                                                                                    });
-                                                                                                                              }
-                                                                                                                        }}
-                                                                                                                        disabled={item?.confirmed || isInactive}
-                                                                                                                        title="Reject Suggestion"
-                                                                                                                        className={`w-7 h-7 rounded-md border border-neutral-600 text-neutral-400 flex items-center justify-center transition-all ${isInactive ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:text-red-500 hover:bg-red-500/10'}`}
-                                                                                                                  >
-                                                                                                                        <X className="w-4 h-4" />
-                                                                                                                  </button>
-                                                                                                                  {tool && (
+                                                                                                            <div className="flex-1 min-w-0">
+                                                                                                                  <p className={`text-xs font-medium leading-normal ${isInactive ? 'line-through' : ''}`}>
+                                                                                                                        {item.text}
+                                                                                                                  </p>
+                                                                                                                  {isEvent && item.calendarEvent?.detected && !isInactive && (
+                                                                                                                        <div className="mt-2.5 p-3 rounded-lg bg-neutral-900/40 border border-white/5 space-y-1.5">
+                                                                                                                              <div className="flex items-center justify-between">
+                                                                                                                                    <span className="text-[10px] font-mono text-amber-500/80 uppercase tracking-wider font-bold">Suggested Event</span>
+                                                                                                                                    <span className="text-[10px] text-neutral-500">{new Date(item.calendarEvent.dateTime).toLocaleDateString()}</span>
+                                                                                                                              </div>
+                                                                                                                              <h5 className="text-xs font-bold text-white truncate">{item.calendarEvent.title}</h5>
+                                                                                                                              <button
+                                                                                                                                    onClick={(e) => {
+                                                                                                                                          e.stopPropagation();
+                                                                                                                                          setEventDate(item.calendarEvent.dateTime.split('T')[0]);
+                                                                                                                                          setEventTime(item.calendarEvent.dateTime.split('T')[1]?.substring(0, 5) || '');
+                                                                                                                                          setEditingEvent({
+                                                                                                                                                calendarEvent: item.calendarEvent,
+                                                                                                                                                actionItemIndex: originalIndex,
+                                                                                                                                                parentFileId: selectedSession.fileId || selectedSession.id
+                                                                                                                                          });
+                                                                                                                                    }}
+                                                                                                                                    className="w-full mt-1.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                                                                                                              >
+                                                                                                                                    <CalendarPlus className="w-3 h-3" /> Approve Suggestion
+                                                                                                                              </button>
+                                                                                                                        </div>
+                                                                                                                  )}
+                                                                                                                  <div className="flex items-center gap-2 mt-3">
                                                                                                                         <button
-                                                                                                                              onClick={(e) => {
+                                                                                                                              onClick={async (e) => {
                                                                                                                                     e.stopPropagation();
+                                                                                                                                    if (item?.confirmed || isInactive) return;
                                                                                                                                     if (window.electron) {
-                                                                                                                                          window.electron.invoke('execute-tool', { tool, params })
-                                                                                                                                                .then(res => {
-                                                                                                                                                      if (res.success) alert("Action Executed!");
-                                                                                                                                                      else alert("Error: " + res.error);
-                                                                                                                                                });
+                                                                                                                                          await window.electron.invoke('calendar-dismiss-event', {
+                                                                                                                                                fileId: selectedSession.fileId || selectedSession.id,
+                                                                                                                                                index: originalIndex
+                                                                                                                                          });
                                                                                                                                     }
                                                                                                                               }}
-                                                                                                                              className="h-7 px-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-medium rounded-md transition-colors border border-amber-500/20 flex items-center gap-2"
+                                                                                                                              disabled={item?.confirmed || isInactive}
+                                                                                                                              title="Reject Suggestion"
+                                                                                                                              className={`w-7 h-7 rounded-md border border-neutral-600 text-neutral-400 flex items-center justify-center transition-all ${isInactive ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:text-red-500 hover:bg-red-500/10'}`}
                                                                                                                         >
-                                                                                                                              <Zap className="w-3 h-3" />
-                                                                                                                              Execute
+                                                                                                                              <X className="w-4 h-4" />
                                                                                                                         </button>
-                                                                                                                  )}
+                                                                                                                        {tool && (
+                                                                                                                              <button
+                                                                                                                                    onClick={(e) => {
+                                                                                                                                          e.stopPropagation();
+                                                                                                                                          if (window.electron) {
+                                                                                                                                                window.electron.invoke('execute-tool', { tool, params })
+                                                                                                                                                      .then(res => {
+                                                                                                                                                            if (res.success) alert("Action Executed!");
+                                                                                                                                                            else alert("Error: " + res.error);
+                                                                                                                                                      });
+                                                                                                                                          }
+                                                                                                                                    }}
+                                                                                                                                    className="h-7 px-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-medium rounded-md transition-colors border border-amber-500/20 flex items-center gap-2"
+                                                                                                                              >
+                                                                                                                                    <Zap className="w-3 h-3" />
+                                                                                                                                    Execute
+                                                                                                                              </button>
+                                                                                                                        )}
+                                                                                                                  </div>
                                                                                                             </div>
                                                                                                       </li>
                                                                                                 );
                                                                                           });
                                                                                     })()}
-                                                                                    {(!selectedSession.details.actionItems || selectedSession.details.actionItems.length === 0) && (
-                                                                                          <li className="text-sm text-neutral-500 italic">{t.dashboardPage.noActionItems}</li>
-                                                                                    )}
                                                                               </ul>
                                                                         </div>
                                                                   </div>
@@ -852,7 +937,7 @@ export default function DashboardPage() {
                                                                               </h4>
                                                                               <p className="text-white font-mono text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">
                                                                                     {selectedSession.details.bug}
-                                                                              </p>
+                                                                                </p>
                                                                         </div>
                                                                         <div>
                                                                               <h4 className="text-xs font-mono text-green-400 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -885,7 +970,7 @@ export default function DashboardPage() {
                                                       />
                                                 </div>
                                           </div>
-                                          <div className="p-6 border-t border-white/5 bg-neutral-900/30 flex gap-3">
+                                          <div className="p-6 border-t border-white/5 bg-neutral-900/30 flex gap-3 mt-auto shrink-0">
                                                 <button className="flex-1 py-3 rounded-xl bg-white/5 border border-white/5 text-sm font-medium hover:bg-white/10 hover:text-white text-neutral-300 transition-colors flex items-center justify-center gap-2">
                                                       <ExternalLink className="w-4 h-4" /> {t.dashboardPage.openOverlay}
                                                 </button>
@@ -920,7 +1005,7 @@ export default function DashboardPage() {
                               </>
                         )}
                   </AnimatePresence>
-                  { }
+
                   <AnimatePresence>
                         {showCalendarModal && (
                               <motion.div

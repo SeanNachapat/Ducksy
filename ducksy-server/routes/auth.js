@@ -4,7 +4,7 @@ const router = express.Router();
 const tokens = new Map();
 const getGoogleClient = () => {
       const redirectUri = process.env.NODE_ENV === 'production'
-            ? 'https://ducksy-gemini-3-hackathon-2026.onrender.com/auth/google/callback'
+            ? 'http://localhost:8080/auth/google/callback'
             : 'http://localhost:8080/auth/google/callback';
       return new OAuth2Client(
             process.env.GOOGLE_CLIENT_ID,
@@ -33,7 +33,7 @@ router.get('/google/callback', async (req, res) => {
             tokens.set(tokenId, { provider: 'google_calendar', ...tokenData });
             setTimeout(() => tokens.delete(tokenId), 60000);
             const baseUrl = process.env.NODE_ENV === 'production'
-                  ? 'https://ducksy-gemini-3-hackathon-2026.onrender.com'
+                  ? 'http://localhost:8080'
                   : 'http://localhost:8080';
             const callbackUrl = `${baseUrl}/auth/success?provider=google_calendar&token_id=${tokenId}`;
             res.redirect(callbackUrl);

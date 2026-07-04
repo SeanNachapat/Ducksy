@@ -1,7 +1,7 @@
 const getServerUrl = () => {
       const isProd = process.env.NODE_ENV === 'production' || !process.env.NODE_ENV;
       return isProd
-            ? 'https://ducksy-gemini-3-hackathon-2026.onrender.com'
+            ? 'http://localhost:8080'
             : 'http://localhost:8080';
 };
 async function transcribeAudio(base64Audio, mimeType, apiKey, userLanguage = 'en', settings = {}) {

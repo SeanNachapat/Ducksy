@@ -1,4 +1,6 @@
-require('dotenv').config();
+const path = require('path');
+// Load env from the repo root's .env.local (one level up from ducksy-server/)
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env.local') });
 const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/auth');
