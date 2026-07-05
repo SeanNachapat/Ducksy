@@ -18,7 +18,11 @@ import {
     Home,
     Mic,
     HelpCircle,
-    ChevronRight
+    ChevronRight,
+    MessageSquare,
+    Globe,
+    Database,
+    ChevronLeft
 } from "lucide-react"
 import { useSettings } from "@/hooks/SettingsContext"
 import { useSessionLogs } from "@/hooks/useSessionLogs"
@@ -31,6 +35,7 @@ export default function AuthLayout({ children }) {
     const { sessionLogs, isLoading } = useSessionLogs()
     const [recentSessions, setRecentSessions] = useState([])
     const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+    const [isCollapsed, setIsCollapsed] = useState(false)
 
     // Update recent sessions
     useEffect(() => {
@@ -83,24 +88,37 @@ export default function AuthLayout({ children }) {
     }
 
     return (
-        <div className="flex h-screen w-screen bg-[#191919] text-neutral-200 font-sans overflow-hidden select-none">
+        <div className="flex h-screen w-screen bg-[#191919] text-neutral-200 font-sans overflow-hidden select-none relative">
             {/* Left Notion Sidebar */}
-            <aside className="w-64 border-r border-white/5 flex flex-col h-full bg-[#191919] text-[14px] text-neutral-400 font-medium select-none z-30 shrink-0">
-                {/* Workspace Selector */}
-                <div className="p-3">
-                    <button className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-all text-left group">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-6 h-6 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0 shadow-sm font-bold text-sm">
-                                🦆
-                            </div>
-                            <div className="truncate">
-                                <h2 className="text-sm font-bold text-neutral-200 leading-tight">Ducksy Workspace</h2>
-                                <p className="text-[10px] text-neutral-500 font-mono tracking-wide leading-none mt-0.5">Nachapat.Workspace</p>
-                            </div>
+            <aside 
+                className="flex flex-col h-full bg-[#191919] text-[14px] text-neutral-400 font-medium select-none z-30 shrink-0 transition-all duration-300 ease-in-out border-r border-white/5 overflow-hidden"
+                style={{ 
+                    width: isCollapsed ? 0 : 256, 
+                    minWidth: isCollapsed ? 0 : 256,
+                    opacity: isCollapsed ? 0 : 1,
+                    borderRightWidth: isCollapsed ? 0 : 1
+                }}
+            >
+                {/* Header Logo & Collapse Trigger */}
+                <div className="p-4 flex items-center justify-between border-b border-white/5 shrink-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-6 h-6 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0 font-bold text-sm">
+                            🦆
                         </div>
-                        <ChevronDown className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300 transition-colors shrink-0" />
+                        <div className="truncate">
+                            <h2 className="text-xs font-bold text-neutral-200 leading-tight">Ducksy</h2>
+                            <p className="text-[8px] text-neutral-500 font-mono tracking-wide leading-none mt-0.5">V3.5.0</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setIsCollapsed(true)}
+                        className="p-1 rounded hover:bg-white/5 text-neutral-500 hover:text-neutral-300 transition-all cursor-pointer shrink-0"
+                        title="Collapse Sidebar"
+                    >
+                        <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
                 </div>
+
 
                 {/* Quick Actions */}
                 <div className="px-3 py-1 space-y-0.5">
@@ -147,6 +165,34 @@ export default function AuthLayout({ children }) {
                                 <span>Dashboard</span>
                             </div>
                         </Link>
+
+                        <Link href="/agent-chat" className="block">
+                            <div className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all group cursor-pointer ${pathname === '/agent-chat' ? 'bg-white/5 text-neutral-200 font-semibold' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}>
+                                <MessageSquare className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300" />
+                                <span>Agent Playground</span>
+                            </div>
+                        </Link>
+
+                        <Link href="/research" className="block">
+                            <div className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all group cursor-pointer ${pathname === '/research' ? 'bg-white/5 text-neutral-200 font-semibold' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}>
+                                <Globe className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300" />
+                                <span>Deep Research</span>
+                            </div>
+                        </Link>
+
+                        <Link href="/documents" className="block">
+                            <div className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all group cursor-pointer ${pathname === '/documents' ? 'bg-white/5 text-neutral-200 font-semibold' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}>
+                                <FileText className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300" />
+                                <span>Document Editor</span>
+                            </div>
+                        </Link>
+
+                        <Link href="/model-gallery" className="block">
+                            <div className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all group cursor-pointer ${pathname === '/model-gallery' ? 'bg-white/5 text-neutral-200 font-semibold' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}>
+                                <Database className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300" />
+                                <span>Model Gallery</span>
+                            </div>
+                        </Link>
                         
                         <Link href="/sessions" className="block">
                             <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all group cursor-pointer ${pathname === '/sessions' ? 'bg-white/5 text-neutral-200 font-semibold' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}>
@@ -181,28 +227,20 @@ export default function AuthLayout({ children }) {
                     )}
                 </div>
 
-                {/* Footer User Profile */}
-                <div className="p-3 border-t border-white/5 bg-[#171717] mt-auto">
-                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-all text-left">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 text-base font-bold shrink-0 shadow-sm relative">
-                                🦆
-                                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-[#171717] shadow-sm animate-pulse" />
-                            </div>
-                            <div className="truncate">
-                                <h3 className="text-xs font-bold text-neutral-200 leading-tight">Nachapat Lamphuang</h3>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1 py-0.1 rounded font-bold uppercase tracking-wider leading-none">Pro</span>
-                                    <span className="text-[9px] text-neutral-500 font-mono leading-none">V3.5.0</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
             </aside>
 
             {/* Main Canvas content */}
             <div className="flex-1 flex flex-col h-full bg-[#202020] relative overflow-hidden select-text">
+                {isCollapsed && (
+                    <button
+                        onClick={() => setIsCollapsed(false)}
+                        className="absolute top-4 left-4 z-40 p-1.5 rounded-lg border border-white/5 bg-[#191919] hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all cursor-pointer shadow-lg flex items-center justify-center"
+                        title="Expand Sidebar"
+                    >
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                )}
                 {children}
             </div>
 

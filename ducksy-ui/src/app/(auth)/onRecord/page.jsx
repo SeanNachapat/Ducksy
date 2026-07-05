@@ -16,6 +16,7 @@ export default function OnRecordPage() {
       const [recordTime, setRecordTime] = useState({ time: 0, formatted: "00:00" })
       const [isPaused, setIsPaused] = useState(false)
       const [isRecording, setIsRecording] = useState(false)
+      const [isHovered, setIsHovered] = useState(false)
       const [expanded, setExpanded] = useState(false)
       const [transcriptionResult, setTranscriptionResult] = useState(null)
       const [isProcessing, setIsProcessing] = useState(false)
@@ -49,12 +50,12 @@ export default function OnRecordPage() {
                         audioContext = new AudioContext()
                         analyser = audioContext.createAnalyser()
                         analyser.fftSize = 64
-                        
+
                         source = audioContext.createMediaStreamSource(stream)
                         source.connect(analyser)
 
                         const dataArray = new Uint8Array(analyser.frequencyBinCount)
-                        
+
                         const updateVolume = () => {
                               if (analyser) {
                                     analyser.getByteFrequencyData(dataArray)
@@ -64,7 +65,7 @@ export default function OnRecordPage() {
                                     }
                                     const average = sum / dataArray.length
                                     const normalized = Math.min(average / 120, 1)
-                                    
+
                                     const now = Date.now()
                                     // Throttle updating the sliding wave to every 80ms to create a smooth scrolling effect
                                     if (now - lastUpdateRef.current > 80) {
@@ -150,6 +151,61 @@ export default function OnRecordPage() {
 
             window.electron.send('resize-recording-window', { width: targetWidth, height: targetHeight })
       }, [transcriptionResult, isProcessing, expanded])
+
+      // Manage window click-through events dynamically based on cursor hover
+      useEffect(() => {
+            if (typeof window === 'undefined' || !window.electron) return
+
+            const handleMouseMove = (e) => {
+                  const element = document.elementFromPoint(e.clientX, e.clientY)
+                  if (!element) {
+                        window.electron.send('set-ignore-mouse', { ignore: true })
+                        setIsHovered(false)
+                        return
+                  }
+
+                  const isInsideInteractive = element.closest('#notch-hover-sensor') ||
+                                              element.closest('#notch-main-body') ||
+                                              element.closest('#notch-results-modal')
+
+                  window.electron.send('set-ignore-mouse', { ignore: !isInsideInteractive })
+                  setIsHovered(!!isInsideInteractive)
+            }
+
+            const handleMouseLeave = () => {
+                  window.electron.send('set-ignore-mouse', { ignore: true })
+                  setIsHovered(false)
+            }
+
+            window.addEventListener('mousemove', handleMouseMove)
+            window.addEventListener('mouseleave', handleMouseLeave)
+            return () => {
+                  window.removeEventListener('mousemove', handleMouseMove)
+                  window.removeEventListener('mouseleave', handleMouseLeave)
+                  // Reset back to non-ignore when component unmounts
+                  window.electron.send('set-ignore-mouse', { ignore: false })
+            }
+      }, [])
+
+      // Automatically dismiss results and close notch when window loses focus (clicks outside) while not recording
+      useEffect(() => {
+            if (typeof window === 'undefined') return
+
+            const handleWindowBlur = () => {
+                  if (!isRecording) {
+                        handleDismissResult()
+                        setIsHovered(false)
+                        if (window.electron) {
+                              window.electron.send('set-ignore-mouse', { ignore: true })
+                        }
+                  }
+            }
+
+            window.addEventListener('blur', handleWindowBlur)
+            return () => {
+                  window.removeEventListener('blur', handleWindowBlur)
+            }
+      }, [isRecording])
 
       useEffect(() => {
             if (!audioBlob) return
@@ -415,12 +471,12 @@ export default function OnRecordPage() {
             }
       }
 
-      const toggleExpand = () => {
-            const newExpanded = !expanded
-            setExpanded(newExpanded)
-            if (typeof window !== 'undefined' && window.electron) {
-                  window.electron.send('resize-recording-window', { height: newExpanded ? 600 : 250 })
-            }
+      const handleDismissResult = () => {
+            setTranscriptionResult(null)
+            setCapturedFile(null)
+            setIsProcessing(false)
+            setExpanded(false)
+            setRecordTime({ time: 0, formatted: "00:00" })
       }
 
       const handleDrop = async (e) => {
@@ -502,15 +558,14 @@ export default function OnRecordPage() {
                               const maxPossibleHeight = 18
                               // smooth scaling calculation based on value in the sliding history array
                               const height = Math.max(3, val * maxPossibleHeight)
-                              
+
                               return (
                                     <motion.div
                                           key={i}
                                           animate={{ height }}
                                           transition={{ type: "spring", stiffness: 350, damping: 20 }}
-                                          className={`w-[4px] rounded-full ${
-                                                 i % 2 === 0 ? (recorderIsPaused ? 'bg-gray-500' : 'bg-amber-500') : (recorderIsPaused ? 'bg-gray-500' : 'bg-red-500')
-                                           }`}
+                                          className={`w-[4px] rounded-full ${i % 2 === 0 ? (recorderIsPaused ? 'bg-gray-500' : 'bg-amber-500') : (recorderIsPaused ? 'bg-gray-500' : 'bg-red-500')
+                                                }`}
                                     />
                               )
                         })}
@@ -542,21 +597,30 @@ export default function OnRecordPage() {
                               </motion.div>
                         )}
                   </AnimatePresence>
-                  
+
+                  {/* Hover Sensor at the top-middle to trigger the notch dropdown in inactive state */}
+                  {!isRecording && !isProcessing && !transcriptionResult && (
+                        <div
+                              id="notch-hover-sensor"
+                              className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[16px] bg-transparent z-[100] cursor-pointer pointer-events-auto"
+                        />
+                  )}
+
                   {/* Camera Notch Container */}
                   <motion.div
-                        animate={{ y: 0 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                        className="w-full max-w-[400px] select-none shrink-0 z-50 overflow-visible"
+                        id="notch-main-body"
+                        animate={{ y: (isRecording || isProcessing || transcriptionResult || isHovered) ? 0 : -46 }}
+                        transition={{ type: "spring", stiffness: 350, damping: 34 }}
+                        className="w-full max-w-[400px] select-none shrink-0 z-50 overflow-visible non-draggable"
                   >
-                        <div className="relative w-full h-[40px] bg-black rounded-b-[20px] shadow-2xl flex items-center pt-[2px] justify-between px-3 select-none">
+                        <div className="relative w-full h-[44px] -mt-[4px] pt-[6px] bg-black rounded-b-[20px] shadow-2xl flex items-center justify-between px-3 select-none">
                               {/* Left curved transition corner */}
-                              <svg className="absolute top-0 right-full w-4 h-4 text-black fill-current pointer-events-none" viewBox="0 0 16 16">
+                              <svg className="absolute top-[4px] right-full w-4 h-4 text-black fill-current pointer-events-none" viewBox="0 0 16 16">
                                     <path d="M16,16 L16,0 L0,0 C8.83,0 16,7.17 16,16 Z" />
                               </svg>
 
                               {/* Right curved transition corner */}
-                              <svg className="absolute top-0 left-full w-4 h-4 text-black fill-current pointer-events-none" viewBox="0 0 16 16">
+                              <svg className="absolute top-[4px] left-full w-4 h-4 text-black fill-current pointer-events-none" viewBox="0 0 16 16">
                                     <path d="M0,16 L0,0 L16,0 C7.17,0 0,7.17 0,16 Z" />
                               </svg>
 
@@ -653,20 +717,21 @@ export default function OnRecordPage() {
                   <AnimatePresence>
                         {expanded && (isProcessing || transcriptionResult) && (
                               <motion.div
+                                    id="notch-results-modal"
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: "auto" }}
                                     exit={{ opacity: 0, height: 0 }}
-                                    className="w-full max-w-xs mt-4 bg-neutral-900/95 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+                                    className="w-full max-w-[400px] mt-4 bg-[#202020]/90 backdrop-blur-md border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
                               >
                                     {isProcessing ? (
                                           <motion.div
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 exit={{ opacity: 0 }}
-                                                className="flex flex-col items-center p-6"
+                                                className="flex flex-col items-center justify-center p-6 h-64 w-full"
                                           >
                                                 {capturedFile?.mimeType?.startsWith('image') && (
-                                                      <div className="w-full mb-4 rounded-xl overflow-hidden border border-white/10">
+                                                      <div className="w-full max-w-[200px] mb-4 rounded-xl overflow-hidden border border-white/10">
                                                             <MediaPreview
                                                                   filePath={capturedFile.filePath}
                                                                   mimeType={capturedFile.mimeType}
@@ -674,9 +739,6 @@ export default function OnRecordPage() {
                                                             />
                                                       </div>
                                                 )}
-
-
-
                                                 <ThinkingIndicator type={capturedFile?.mimeType?.startsWith('image') ? 'image' : 'audio'} />
                                           </motion.div>
                                     ) : transcriptionResult?.status === 'failed' ? (
@@ -684,24 +746,24 @@ export default function OnRecordPage() {
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 exit={{ opacity: 0 }}
-                                                className="flex flex-col items-center justify-center p-8 h-[250px]"
+                                                className="flex flex-col items-center justify-center p-8 h-64 text-neutral-500"
                                           >
                                                 <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
                                                       <X className="w-6 h-6 text-red-500" />
                                                 </div>
-                                                <p className="text-sm font-medium text-white mb-1">{t.error || "Analysis Failed"}</p>
-                                                <p className="text-xs text-neutral-500 text-center px-4 mb-6">
-                                                      {transcriptionResult.error || "Something went wrong during analysis."}
+                                                <p className="text-sm font-medium text-red-400 mb-1">{t.session?.failedTitle || "Analysis Failed"}</p>
+                                                <p className="text-xs text-neutral-600 text-center px-4 mb-5 leading-relaxed">
+                                                      {transcriptionResult.error || t.session?.failedDesc || "Something went wrong during analysis."}
                                                 </p>
 
                                                 <motion.button
-                                                      whileHover={{ scale: 1.05 }}
-                                                      whileTap={{ scale: 0.95 }}
+                                                      whileHover={{ scale: 1.03 }}
+                                                      whileTap={{ scale: 0.97 }}
                                                       onClick={handleRetry}
-                                                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-xs font-bold hover:bg-neutral-200 transition-colors"
+                                                      className="px-6 py-2.5 bg-neutral-800 text-white hover:bg-neutral-700 rounded-xl text-xs font-semibold transition-colors border border-white/5 flex items-center gap-2"
                                                 >
-                                                      <RefreshCw className="w-4 h-4" />
-                                                      Retry Analysis
+                                                      <RefreshCw className="w-3.5 h-3.5" />
+                                                      {t.session?.retry || "Retry Analysis"}
                                                 </motion.button>
                                           </motion.div>
                                     ) : transcriptionResult ? (
@@ -718,7 +780,7 @@ export default function OnRecordPage() {
                                                             }
                                                       }
                                                 }}
-                                                className="flex flex-col h-full"
+                                                className="flex flex-col h-full animate-in fade-in duration-200"
                                           >
                                                 <div className="p-6 border-b border-white/5 flex items-start justify-between bg-neutral-900/30">
                                                       <div>
@@ -726,214 +788,194 @@ export default function OnRecordPage() {
                                                                   <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-white/5 text-neutral-400 border border-white/5">
                                                                         {transcriptionResult.mode || "lens"}
                                                                   </span>
-                                                                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider
+                                                                        ${transcriptionResult.type === 'summary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                                              transcriptionResult.type === 'debug' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                                                    'bg-purple-500/10 text-purple-400 border border-purple-500/20'}`}
+                                                                  >
                                                                         {transcriptionResult.type || "summary"}
+                                                                  </span>
+                                                                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-green-500/10 text-green-500 border border-green-500/20">
+                                                                        {t.status?.completed || "completed"}
                                                                   </span>
                                                             </div>
                                                             <h2 className="text-xl font-bold text-white leading-tight">{transcriptionResult.title}</h2>
-                                                            <p className="text-xs text-neutral-500 mt-1">{t.session.summary} • Now</p>
+                                                            <p className="text-xs text-neutral-500 mt-1">{transcriptionResult.subtitle || (t.session?.summary ? `${t.session.summary} • Now` : "Summary • Now")}</p>
+                                                            {transcriptionResult.duration > 0 && (
+                                                                  <p className="text-xs text-neutral-600 mt-1">
+                                                                        {t.session?.duration || "Duration"}: {Math.floor(transcriptionResult.duration / 60)}m {transcriptionResult.duration % 60}s
+                                                                  </p>
+                                                            )}
                                                       </div>
                                                       <button
-                                                            onClick={toggleExpand}
+                                                            onClick={handleDismissResult}
                                                             className="p-2 rounded-full hover:bg-white/10 text-neutral-500 hover:text-white transition-colors"
                                                       >
-                                                            <ChevronUp className="w-5 h-5" />
+                                                            <X className="w-5 h-5" />
                                                       </button>
                                                 </div>
 
-                                                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar max-h-[400px]">
-                                                      {transcriptionResult.details?.topic && (
-                                                            <motion.div
-                                                                  variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
-                                                                  className="space-y-2"
-                                                            >
-                                                                  <h3 className="text-xs font-mono text-neutral-500 uppercase tracking-widest">{t.dashboardPage?.meetingTopic || "Meeting Topic"}</h3>
-                                                                  <p className="text-sm text-neutral-300 leading-relaxed bg-white/2 p-3 rounded-xl border border-white/5">
-                                                                        {transcriptionResult.details.topic}
-                                                                  </p>
-                                                            </motion.div>
-                                                      )}
+                                                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar max-h-[360px]">
+                                                      <div className="mb-6 rounded-xl overflow-hidden border border-white/10">
+                                                            <MediaPreview
+                                                                  fileId={transcriptionResult.fileId || transcriptionResult.id}
+                                                                  filePath={transcriptionResult.filePath || capturedFile?.filePath}
+                                                                  mimeType={transcriptionResult.mimeType || capturedFile?.mimeType}
+                                                                  duration={transcriptionResult.duration || 0}
+                                                            />
+                                                      </div>
 
-                                                      {transcriptionResult.details?.summary && (
-                                                            <motion.div
-                                                                  variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
-                                                                  className="space-y-2"
-                                                            >
-                                                                  <h3 className="text-xs font-mono text-neutral-500 uppercase tracking-widest">{t.dashboardPage?.summary || "Summary"}</h3>
-                                                                  <p className="text-sm text-neutral-300 leading-relaxed">
-                                                                        {transcriptionResult.details.summary}
-                                                                  </p>
-                                                            </motion.div>
-                                                      )}
+                                                      {transcriptionResult.type === 'summary' && transcriptionResult.details && (
+                                                            <div className="space-y-6">
+                                                                  {transcriptionResult.details.summary && (
+                                                                        <div>
+                                                                              <h4 className="text-xs font-mono text-neutral-500 uppercase tracking-widest mb-2">{t.dashboardPage?.summary || "Summary"}</h4>
+                                                                              <p className="text-neutral-300 text-sm leading-relaxed">{transcriptionResult.details.summary}</p>
+                                                                        </div>
+                                                                  )}
 
-                                                      {transcriptionResult.details?.actionItems && transcriptionResult.details.actionItems.length > 0 && (
-                                                            <motion.div
-                                                                  variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
-                                                                  className="space-y-2"
-                                                            >
-                                                                  <h3 className="text-xs font-mono text-neutral-500 uppercase tracking-widest">{t.dashboardPage?.actionItems || "Action Items"}</h3>
-                                                                  <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                                                        <ul className="space-y-2">
-                                                                              {
-                                                                                    (() => {
-                                                                                          const items = transcriptionResult.details.actionItems || [];
-                                                                                          const sortedItems = [...items].sort((a, b) => {
-                                                                                                const getStatus = (item) => {
-                                                                                                      const isPast = item.calendarEvent?.dateTime && new Date(item.calendarEvent.dateTime) < new Date();
-                                                                                                      const isDismissed = item.dismissed;
-                                                                                                      // 0: Active/Pending, 1: Inactive (Dismissed/Past)
-                                                                                                      return (isDismissed || isPast) ? 1 : 0;
-                                                                                                };
-
-                                                                                                const statusA = getStatus(a);
-                                                                                                const statusB = getStatus(b);
-
-                                                                                                if (statusA !== statusB) return statusA - statusB;
-
-                                                                                                // Secondary sort: Date (Ascending)
-                                                                                                const dateA = a.calendarEvent?.dateTime ? new Date(a.calendarEvent.dateTime) : new Date(8640000000000000); // No date = far future
-                                                                                                const dateB = b.calendarEvent?.dateTime ? new Date(b.calendarEvent.dateTime) : new Date(8640000000000000);
-                                                                                                return dateA - dateB;
-                                                                                          });
-
-                                                                                          return sortedItems.map((item, i) => {
-                                                                                                // Note: 'i' here is the index in the SORTED list. 
-                                                                                                // We need to find the ORIGINAL index for callbacks if they rely on index.
-                                                                                                const originalIndex = items.indexOf(item);
+                                                                  {transcriptionResult.details.actionItems && transcriptionResult.details.actionItems.length > 0 && (
+                                                                        <div className="space-y-3">
+                                                                              <h4 className="text-xs font-mono text-neutral-500 uppercase tracking-widest mb-3">{t.dashboardPage?.actionItems || "Action Items"}</h4>
+                                                                              <ul className="space-y-2.5">
+                                                                                    {(() => {
+                                                                                          let itemIndex = 0;
+                                                                                          return transcriptionResult.details.actionItems.map((item, originalIndex) => {
+                                                                                                const isInactive = item.dismissed || item.confirmed;
+                                                                                                const isEvent = item.type === 'event';
+                                                                                                const hasTool = item.toolCall && item.toolCall.tool;
+                                                                                                const tool = hasTool ? item.toolCall.tool : null;
+                                                                                                const params = hasTool ? item.toolCall.params : null;
+                                                                                                const iconIndex = itemIndex;
+                                                                                                if (!isInactive) {
+                                                                                                      itemIndex++;
+                                                                                                }
 
                                                                                                 const isObject = typeof item === 'object' && item !== null;
                                                                                                 const text = isObject ? (item.text || item.description || "") : String(item);
-                                                                                                const tool = isObject ? item.tool : null;
-                                                                                                const params = isObject ? item.parameters : {};
-
-                                                                                                const isPast = item.calendarEvent?.dateTime && new Date(item.calendarEvent.dateTime) < new Date();
-                                                                                                const isInactive = item?.dismissed || isPast;
 
                                                                                                 return (
-                                                                                                      <motion.li
+                                                                                                      <li
                                                                                                             key={originalIndex}
-                                                                                                            variants={{ hidden: { opacity: 0, x: -10 }, visible: { opacity: 1, x: 0 } }}
-                                                                                                            className={`flex items-start justify-between gap-4 text-sm text-neutral-300 bg-white/2 p-3 rounded-xl border border-white/5 transition-colors group/item ${isInactive ? 'opacity-50' : 'hover:bg-white/5'}`}
+                                                                                                            className={`flex items-start gap-3 p-3.5 rounded-xl border border-white/5 transition-all
+                                                                                                                  ${isInactive
+                                                                                                                        ? 'bg-neutral-900/10 border-transparent text-neutral-600'
+                                                                                                                        : 'bg-[#272727]/20 text-neutral-200 hover:border-white/10 hover:bg-[#272727]/30'
+                                                                                                                  }`}
                                                                                                       >
-                                                                                                            <div className="flex items-start gap-3 flex-1">
-                                                                                                                  <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                                                                                                                  <div className="flex flex-col gap-1">
-                                                                                                                        {isObject && item.type === 'event' && (
-                                                                                                                              <div className="flex items-center gap-1.5 text-amber-500/80 mb-0.5">
-                                                                                                                                    <Calendar className="w-3 h-3" />
-                                                                                                                                    <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Event</span>
-                                                                                                                              </div>
-                                                                                                                        )}
-                                                                                                                        <p className={`leading-relaxed ${isInactive ? 'line-through' : ''}`}>{text}</p>
-                                                                                                                  </div>
+                                                                                                            <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-xs font-mono font-bold mt-0.5
+                                                                                                                  ${isInactive ? 'bg-neutral-800 text-neutral-600' : 'bg-amber-500/10 text-amber-500'}`}
+                                                                                                            >
+                                                                                                                  {isInactive ? '✓' : iconIndex + 1}
                                                                                                             </div>
-
-                                                                                                            <div className="flex gap-2 shrink-0 mt-0.5">
-                                                                                                                  <button
-                                                                                                                        onClick={(e) => {
-                                                                                                                              e.stopPropagation()
-                                                                                                                              if (item?.confirmed || isInactive) return;
-
-                                                                                                                              let eventData = {};
-
-                                                                                                                              // Use the specific calendar event data if available on the item
-                                                                                                                              if (item.calendarEvent) {
-                                                                                                                                    eventData = {
-                                                                                                                                          ...item.calendarEvent,
-                                                                                                                                          detected: true
-                                                                                                                                    };
-                                                                                                                              } else {
-                                                                                                                                    // Fallback default: 1 hour from now
-                                                                                                                                    const now = new Date()
-                                                                                                                                    now.setHours(now.getHours() + 1)
-                                                                                                                                    eventData = {
-                                                                                                                                          title: text,
-                                                                                                                                          description: `Action item from session: ${transcriptionResult.title}`,
-                                                                                                                                          dateTime: now.toISOString(),
-                                                                                                                                          detected: true
-                                                                                                                                    };
-                                                                                                                              }
-
-                                                                                                                              // Reuse existing dashboard logic for calendar if needed, or just open the modal with this data
-                                                                                                                              setEventDate(eventData.dateTime?.split('T')[0] || new Date().toISOString().split('T')[0]);
-                                                                                                                              setEventTime(eventData.dateTime?.split('T')[1]?.substring(0, 5) || '12:00');
-                                                                                                                              setShowCalendarModal(true);
-                                                                                                                        }}
-                                                                                                                        disabled={item?.confirmed || isInactive}
-                                                                                                                        title={item?.confirmed ? "Confirmed" : item?.dismissed ? "Rejected" : isPast ? "Past Event" : "Add to Calendar"}
-                                                                                                                        className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${item?.confirmed
-                                                                                                                              ? 'bg-amber-500 border-amber-500 text-neutral-950 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-                                                                                                                              : isInactive
-                                                                                                                                    ? 'bg-neutral-800/50 border-neutral-800 text-neutral-600 cursor-not-allowed'
-                                                                                                                                    : 'bg-transparent border-neutral-600 text-neutral-400 hover:border-amber-500 hover:text-amber-500 hover:bg-amber-500/10'
-                                                                                                                              }`}
-                                                                                                                  >
-                                                                                                                        {item?.dismissed ? (
-                                                                                                                              <X className="w-4 h-4" />
-                                                                                                                        ) : (
-                                                                                                                              <Plus className="w-4 h-4" strokeWidth={item?.confirmed ? 3 : 2} />
-                                                                                                                        )}
-                                                                                                                  </button>
-
-                                                                                                                  <button
-                                                                                                                        onClick={async (e) => {
-                                                                                                                              e.stopPropagation();
-                                                                                                                              if (item?.confirmed || isInactive) return;
-                                                                                                                              if (window.electron) {
-                                                                                                                                    await window.electron.invoke('calendar-dismiss-event', {
-                                                                                                                                          fileId: transcriptionResult.fileId || transcriptionResult.id,
-                                                                                                                                          index: originalIndex
-                                                                                                                                    });
-                                                                                                                              }
-                                                                                                                        }}
-                                                                                                                        disabled={item?.confirmed || isInactive}
-                                                                                                                        title="Reject Suggestion"
-                                                                                                                        className={`w-7 h-7 rounded-md border border-neutral-600 text-neutral-400 flex items-center justify-center transition-all ${isInactive ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:text-red-500 hover:bg-red-500/10'}`}
-                                                                                                                  >
-                                                                                                                        <X className="w-4 h-4" />
-                                                                                                                  </button>
-
-                                                                                                                  {tool && (
+                                                                                                            <div className="flex-1 min-w-0">
+                                                                                                                  <p className={`text-xs font-medium leading-normal ${isInactive ? 'line-through' : ''}`}>
+                                                                                                                        {text}
+                                                                                                                  </p>
+                                                                                                                  {isEvent && item.calendarEvent?.detected && !isInactive && (
+                                                                                                                        <div className="mt-2.5 p-3 rounded-lg bg-neutral-900/40 border border-white/5 space-y-1.5">
+                                                                                                                              <div className="flex items-center justify-between">
+                                                                                                                                    <span className="text-[10px] font-mono text-amber-500/80 uppercase tracking-wider font-bold">Suggested Event</span>
+                                                                                                                                    <span className="text-[10px] text-neutral-500">{item.calendarEvent.dateTime ? new Date(item.calendarEvent.dateTime).toLocaleDateString() : ""}</span>
+                                                                                                                              </div>
+                                                                                                                              <h5 className="text-xs font-bold text-white truncate">{item.calendarEvent.title}</h5>
+                                                                                                                              <button
+                                                                                                                                    onClick={(e) => {
+                                                                                                                                          e.stopPropagation();
+                                                                                                                                          setEventDate(item.calendarEvent.dateTime?.split('T')[0] || new Date().toISOString().split('T')[0]);
+                                                                                                                                          setEventTime(item.calendarEvent.dateTime?.split('T')[1]?.substring(0, 5) || '12:00');
+                                                                                                                                          setShowCalendarModal(true);
+                                                                                                                                    }}
+                                                                                                                                    className="w-full mt-1.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                                                                                                                              >
+                                                                                                                                    <CalendarPlus className="w-3 h-3" /> Approve Suggestion
+                                                                                                                              </button>
+                                                                                                                        </div>
+                                                                                                                  )}
+                                                                                                                  <div className="flex items-center gap-2 mt-3">
                                                                                                                         <button
-                                                                                                                              onClick={(e) => {
+                                                                                                                              onClick={async (e) => {
                                                                                                                                     e.stopPropagation();
+                                                                                                                                    if (item?.confirmed || isInactive) return;
                                                                                                                                     if (window.electron) {
-                                                                                                                                          window.electron.invoke('execute-tool', { tool, params })
-                                                                                                                                                .then(res => {
-                                                                                                                                                      if (res.success) alert("Action Executed!");
-                                                                                                                                                      else alert("Error: " + res.error);
-                                                                                                                                                });
+                                                                                                                                          await window.electron.invoke('calendar-dismiss-event', {
+                                                                                                                                                fileId: transcriptionResult.fileId || transcriptionResult.id,
+                                                                                                                                                index: originalIndex
+                                                                                                                                          });
                                                                                                                                     }
                                                                                                                               }}
-                                                                                                                              className="h-7 px-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-medium rounded-md transition-colors border border-amber-500/20 flex items-center gap-2"
+                                                                                                                              disabled={item?.confirmed || isInactive}
+                                                                                                                              title="Reject Suggestion"
+                                                                                                                              className={`w-7 h-7 rounded-md border border-neutral-600 text-neutral-400 flex items-center justify-center transition-all ${isInactive ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:text-red-500 hover:bg-red-500/10'}`}
                                                                                                                         >
-                                                                                                                              <Monitor className="w-3 h-3" />
-                                                                                                                              Execute
+                                                                                                                              <X className="w-4 h-4" />
                                                                                                                         </button>
-                                                                                                                  )}
+                                                                                                                        {tool && (
+                                                                                                                              <button
+                                                                                                                                    onClick={(e) => {
+                                                                                                                                          e.stopPropagation();
+                                                                                                                                          if (window.electron) {
+                                                                                                                                                window.electron.invoke('execute-tool', { tool, params })
+                                                                                                                                                      .then(res => {
+                                                                                                                                                            if (res.success) alert("Action Executed!");
+                                                                                                                                                            else alert("Error: " + res.error);
+                                                                                                                                                      });
+                                                                                                                                          }
+                                                                                                                                    }}
+                                                                                                                                    className="h-7 px-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-xs font-medium rounded-md transition-colors border border-amber-500/20 flex items-center gap-2"
+                                                                                                                              >
+                                                                                                                                    <Zap className="w-3 h-3" />
+                                                                                                                                    Execute
+                                                                                                                              </button>
+                                                                                                                        )}
+                                                                                                                  </div>
                                                                                                             </div>
-                                                                                                      </motion.li>
+                                                                                                      </li>
                                                                                                 );
                                                                                           });
-                                                                                    })()
-                                                                              }
-
-                                                                        </ul>
-                                                                  </div>
-                                                            </motion.div>
-                                                      )}
-                                                      {transcriptionResult.details?.code && (
-                                                            <motion.div
-                                                                  variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
-                                                                  className="space-y-2"
-                                                            >
-                                                                  <h3 className="text-xs font-mono text-neutral-500 uppercase tracking-widest">{t.session.code}</h3>
-                                                                  <div className="p-3 bg-black/30 rounded-xl border border-white/5 font-mono text-xs text-neutral-300 overflow-x-auto">
-                                                                        <pre>{transcriptionResult.details.code}</pre>
-                                                                  </div>
-                                                            </motion.div>
+                                                                                    })()}
+                                                                              </ul>
+                                                                        </div>
+                                                                  )}
+                                                            </div>
                                                       )}
 
+                                                      {transcriptionResult.type === 'debug' && transcriptionResult.details && (
+                                                            <div className="space-y-6">
+                                                                  {transcriptionResult.details.bug && (
+                                                                        <div>
+                                                                              <h4 className="text-xs font-mono text-red-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                                                    <Bug className="w-3 h-3" /> {t.dashboardPage?.reportedBug || "Reported Bug"}
+                                                                              </h4>
+                                                                              <p className="text-white font-mono text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                                                                                    {transcriptionResult.details.bug}
+                                                                              </p>
+                                                                        </div>
+                                                                  )}
+                                                                  {transcriptionResult.details.fix && (
+                                                                        <div>
+                                                                              <h4 className="text-xs font-mono text-green-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                                                    <Zap className="w-3 h-3" /> {t.dashboardPage?.solutionApplied || "Solution Applied"}
+                                                                              </h4>
+                                                                              <p className="text-neutral-300 text-sm leading-relaxed">
+                                                                                    {transcriptionResult.details.fix}
+                                                                              </p>
+                                                                        </div>
+                                                                  )}
+                                                                  {transcriptionResult.details.code && (
+                                                                        <div className="relative group">
+                                                                              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    <button className="p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors">
+                                                                                          <Copy className="w-3 h-3" />
+                                                                                    </button>
+                                                                              </div>
+                                                                              <pre className="bg-[#0d1117] p-4 rounded-xl border border-white/10 text-xs font-mono text-neutral-300 overflow-x-auto">
+                                                                                    <code>{transcriptionResult.details.code}</code>
+                                                                              </pre>
+                                                                        </div>
+                                                                  )}
+                                                            </div>
+                                                      )}
 
                                                       <div className="pt-4 border-t border-white/5">
                                                             <SessionChat
@@ -942,13 +984,14 @@ export default function OnRecordPage() {
                                                             />
                                                       </div>
                                                 </div>
-                                                <div className="p-4 border-t border-white/5 bg-neutral-900/50 flex justify-between items-center gap-2">
+
+                                                <div className="p-6 border-t border-white/5 bg-neutral-900/30 flex gap-3 mt-auto shrink-0 justify-between items-center">
                                                       <button
                                                             onClick={handleRetry}
-                                                            className="flex items-center gap-2 px-3 py-2 bg-white/5 text-neutral-400 text-xs font-medium rounded-lg hover:bg-white/10 hover:text-white transition-colors border border-white/10"
+                                                            className="flex-1 py-3 bg-neutral-800 text-white hover:bg-neutral-700 rounded-xl text-xs font-semibold transition-colors border border-white/5 flex items-center justify-center gap-1.5"
                                                             title={t.dashboardPage?.regen || "Regenerate"}
                                                       >
-                                                            <Sparkles className="w-4 h-4" />
+                                                            <Sparkles className="w-4 h-4 text-amber-500" />
                                                             {t.dashboardPage?.regen || "Re-gen"}
                                                       </button>
 
@@ -960,20 +1003,19 @@ export default function OnRecordPage() {
                                                                   setExpanded(false);
                                                                   setRecordTime({ time: 0, formatted: "00:00" });
                                                                   if (typeof window !== 'undefined' && window.electron) {
-                                                                        window.electron.send('resize-recording-window', { height: 250 });
+                                                                        window.electron.send('resize-recording-window', { height: 40 });
                                                                   }
                                                             }}
-                                                            className="flex items-center gap-2 px-3 py-2 bg-white/5 text-neutral-400 text-xs font-medium rounded-lg hover:bg-white/10 hover:text-white transition-colors border border-white/10"
+                                                            className="flex-1 py-3 bg-neutral-800 text-white hover:bg-neutral-700 rounded-xl text-xs font-semibold transition-colors border border-white/5 flex items-center justify-center gap-1.5"
                                                             title="New Scan"
                                                       >
-                                                            <Plus className="w-4 h-4" />
+                                                            <Plus className="w-4 h-4 text-blue-400" />
                                                             New Scan
                                                       </button>
 
-
                                                       <button
                                                             onClick={() => window.electron.send('close-overlay')}
-                                                            className="px-4 py-2 bg-white text-black text-xs font-bold rounded-lg hover:bg-neutral-200 transition-colors"
+                                                            className="px-5 py-3 bg-white hover:bg-neutral-200 text-black text-xs font-bold rounded-xl transition-colors shadow-sm"
                                                       >
                                                             Done
                                                       </button>

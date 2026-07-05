@@ -9,8 +9,34 @@ const SERVER_URL = 'http://localhost:8080'
 const dotenv = require('dotenv')
 dotenv.config()
 const isProd = app.isPackaged
+app.disableHardwareAcceleration()
 app.commandLine.appendSwitch('enable-transparent-visuals')
 const loadURL = serve({ directory: 'out' });
+async function safeLoadURL(win, url) {
+      if (isProd) {
+            if (win === mainWindow) {
+                  await loadURL(win);
+            } else {
+                  await win.loadURL(url);
+            }
+      } else {
+            let loaded = false;
+            let attempts = 0;
+            while (!loaded && attempts < 30) {
+                  try {
+                        await win.loadURL(url);
+                        loaded = true;
+                  } catch (err) {
+                        attempts++;
+                        console.log(`[Electron] Dev server at ${url} not ready (attempt ${attempts}/30). Retrying in 1s...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                  }
+            }
+            if (!loaded) {
+                  throw new Error(`Failed to load ${url} after 30 attempts.`);
+            }
+      }
+}
 function getAppPath(page = '') {
       if (isProd) {
             if (page === '' || page === 'index' || page === 'index.html') {
@@ -70,13 +96,24 @@ async function createOnRecordingWindow() {
       onRecordingWindow.setPosition(Math.floor((screenWidth - width_f) / 2), 0)
       onRecordingWindow.setAlwaysOnTop(true, "screen-saver")
       onRecordingWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      if (isProd) {
-            await onRecordingWindow.loadURL("app://-/onRecord");
-      } else {
-            await onRecordingWindow.loadURL("http://localhost:3000/onRecord")
-      }
+      await safeLoadURL(onRecordingWindow, isProd ? "app://-/onRecord" : "http://localhost:3000/onRecord")
       onRecordingWindow.on("page-title-updated", (e) => {
             e.preventDefault()
+      })
+      onRecordingWindow.on("blur", () => {
+            if (onRecordingWindow && !onRecordingWindow.isDestroyed()) {
+                  onRecordingWindow.setBackgroundColor("#00000000")
+            }
+      })
+      onRecordingWindow.on("focus", () => {
+            if (onRecordingWindow && !onRecordingWindow.isDestroyed()) {
+                  onRecordingWindow.setBackgroundColor("#00000000")
+            }
+      })
+      onRecordingWindow.on("show", () => {
+            if (onRecordingWindow && !onRecordingWindow.isDestroyed()) {
+                  onRecordingWindow.setBackgroundColor("#00000000")
+            }
       })
       onRecordingWindow.on("closed", () => {
             onRecordingWindow = null
@@ -114,11 +151,7 @@ async function createSelectionWindow() {
             }
       })
       selectionWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-      if (isProd) {
-            await selectionWindow.loadURL("app://-/magic-lens")
-      } else {
-            await selectionWindow.loadURL("http://localhost:3000/magic-lens")
-      }
+      await safeLoadURL(selectionWindow, isProd ? "app://-/magic-lens" : "http://localhost:3000/magic-lens")
       selectionWindow.on("closed", () => {
             selectionWindow = null
       })
@@ -187,10 +220,8 @@ async function createWindow() {
             },
       })
       setMainWindow(mainWindow);
-      if (isProd) {
-            await loadURL(mainWindow);
-      } else {
-            await mainWindow.loadURL("http://localhost:3000")
+      await safeLoadURL(mainWindow, isProd ? "app://-/index" : "http://localhost:3000")
+      if (!isProd) {
             mainWindow.webContents.openDevTools()
       }
       mainWindow.webContents.on("did-finish-load", () => {
@@ -317,9 +348,8 @@ if (!gotTheLock) {
       })
 }
 app.whenReady().then(async () => {
-      // Setup permission handler for renderer process (critical for packaged app)
       session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-            const allowedPermissions = ["media", "mediaKeySystem", "display-capture"]
+            const allowedPermissions = ["media", "mediaKeySystem", "display-capture", "fullscreen"]
             if (allowedPermissions.includes(permission)) {
                   console.log("[Permission] Granted:", permission)
                   callback(true)
@@ -338,7 +368,7 @@ app.whenReady().then(async () => {
             })
       })
       session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-            const allowedPermissions = ["media", "mediaKeySystem", "display-capture"]
+            const allowedPermissions = ["media", "mediaKeySystem", "display-capture", "fullscreen"]
             return allowedPermissions.includes(permission)
       })
 
@@ -524,6 +554,9 @@ ipcMain.on("activate-magic-lens", async () => {
             if (mainWindow && !mainWindow.isDestroyed()) {
                   mainWindow.hide()
             }
+            if (onRecordingWindow && !onRecordingWindow.isDestroyed()) {
+                  onRecordingWindow.hide()
+            }
             console.log("Selection Window exists:", !!selectionWindow, selectionWindow ? !selectionWindow.isDestroyed() : "N/A")
             if (!selectionWindow || selectionWindow.isDestroyed()) {
                   console.log("Creating new selection window...")
@@ -591,6 +624,16 @@ ipcMain.on("resize-recording-window", (event, { width, height }) => {
                   width: newWidth,
                   height: newHeight
             }, true)
+      }
+})
+ipcMain.on("set-ignore-mouse", (event, data) => {
+      const ignore = data?.ignore ?? true
+      if (onRecordingWindow && !onRecordingWindow.isDestroyed()) {
+            if (ignore) {
+                  onRecordingWindow.setIgnoreMouseEvents(true, { forward: true })
+            } else {
+                  onRecordingWindow.setIgnoreMouseEvents(false)
+            }
       }
 })
 ipcMain.handle("request-sizeCache", async (event) => {

@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, memo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
     X,
@@ -23,12 +23,25 @@ import Link from "next/link"
 import { useSettings } from "@/hooks/SettingsContext"
 import translations from "../locales/translations.json"
 
-export default function SettingsModal({ isOpen, onClose }) {
+const BUILDERS = [
+    {
+        id: 104921609,
+        login: "SeanNachapat",
+        name: "Sean Nachapat",
+        avatar_url: "https://avatars.githubusercontent.com/u/104921609?v=4",
+        html_url: "https://github.com/SeanNachapat",
+        twitter_username: "SeanNachapat",
+        bio: "Lead Developer & Architect"
+    }
+]
+
+const SettingsModal = memo(function SettingsModal({ isOpen, onClose }) {
     const { settings, updateSettings, t } = useSettings()
     const [activeSection, setActiveSection] = useState("general")
     const [clearing, setClearing] = useState(false)
     const [showBuilders, setShowBuilders] = useState(false)
-    const [contributors, setContributors] = useState([])
+    const [localPersonality, setLocalPersonality] = useState(settings.personality || 50)
+    const [localResponses, setLocalResponses] = useState(settings.responses || 50)
     const [mcpStatus, setMcpStatus] = useState({
         google_calendar: { connected: false },
         notion: { connected: false }
@@ -44,43 +57,12 @@ export default function SettingsModal({ isOpen, onClose }) {
         size: null,
     })
 
-    // Fetch contributors if Meet Builders is open
     useEffect(() => {
-        const fetchContributors = async () => {
-            try {
-                const response = await fetch("https://api.github.com/repos/SeanNachapat/Ducksy-Gemini-3-Hackathon-2026/contributors")
-                if (response.ok) {
-                    const data = await response.json()
-                    const detailedContributors = await Promise.all(
-                        data.slice(0, 6).map(async (contributor) => {
-                            try {
-                                const userResponse = await fetch(`https://api.github.com/users/${contributor.login}`)
-                                if (userResponse.ok) {
-                                    const userData = await userResponse.json()
-                                    return {
-                                        ...contributor,
-                                        twitter_username: userData.twitter_username,
-                                        blog: userData.blog,
-                                        bio: userData.bio,
-                                        name: userData.name
-                                    }
-                                }
-                            } catch (e) {
-                                console.error("Failed to fetch user details", e)
-                            }
-                            return contributor
-                        })
-                    )
-                    setContributors(detailedContributors)
-                }
-            } catch (error) {
-                console.error("Failed to fetch contributors", error)
-            }
+        if (isOpen) {
+            setLocalPersonality(settings.personality || 50)
+            setLocalResponses(settings.responses || 50)
         }
-        if (showBuilders && contributors.length === 0) {
-            fetchContributors()
-        }
-    }, [showBuilders])
+    }, [isOpen, settings.personality, settings.responses])
 
     // Check server status
     useEffect(() => {
@@ -371,8 +353,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                                                         type="range"
                                                         min="0"
                                                         max="100"
-                                                        value={settings.personality}
-                                                        onChange={(e) => updateSettings({ personality: parseInt(e.target.value) })}
+                                                        value={localPersonality}
+                                                        onChange={(e) => setLocalPersonality(parseInt(e.target.value))}
+                                                        onMouseUp={() => updateSettings({ personality: localPersonality })}
+                                                        onTouchEnd={() => updateSettings({ personality: localPersonality })}
                                                         className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                                     />
                                                 </div>
@@ -398,8 +382,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                                                         type="range"
                                                         min="0"
                                                         max="100"
-                                                        value={settings.responses}
-                                                        onChange={(e) => updateSettings({ responses: parseInt(e.target.value) })}
+                                                        value={localResponses}
+                                                        onChange={(e) => setLocalResponses(parseInt(e.target.value))}
+                                                        onMouseUp={() => updateSettings({ responses: localResponses })}
+                                                        onTouchEnd={() => updateSettings({ responses: localResponses })}
                                                         className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                                     />
                                                 </div>
@@ -701,8 +687,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                                                             exit={{ height: 0, opacity: 0, marginTop: 0 }}
                                                             className="overflow-hidden space-y-3"
                                                         >
-                                                            {contributors.length > 0 ? (
-                                                                contributors.map((contributor) => (
+                                                            {BUILDERS.map((contributor) => (
                                                                     <div key={contributor.id} className="bg-[#272727]/20 border border-white/5 p-4 rounded-lg flex items-center gap-4">
                                                                         <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-base font-bold text-neutral-500 border border-white/5 overflow-hidden shrink-0">
                                                                             <img src={contributor.avatar_url} alt={contributor.login} className="w-full h-full object-cover" />
@@ -723,10 +708,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                                                                             </div>
                                                                         </div>
                                                                     </div>
-                                                                ))
-                                                            ) : (
-                                                                <div className="text-center text-neutral-500 text-[10px] py-4 font-mono">Loading contributors...</div>
-                                                            )}
+                                                                ))}
                                                         </motion.div>
                                                     )}
                                                 </AnimatePresence>
@@ -741,4 +723,6 @@ export default function SettingsModal({ isOpen, onClose }) {
             )}
         </AnimatePresence>
     )
-}
+})
+
+export default SettingsModal

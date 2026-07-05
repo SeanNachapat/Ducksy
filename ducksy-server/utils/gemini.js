@@ -375,10 +375,38 @@ async function analyzeMedia(base64Data, mimeType, apiKey, customPrompt = null) {
             throw new Error(`Unsupported media type: ${mimeType}`)
       }
 }
+async function rewriteText(text, action, apiKey, settings = {}) {
+      let prompt = "";
+      if (action === 'expand') {
+            prompt = `Please expand the following text, providing more context, details, and clear explanations while maintaining a professional tone. Return ONLY the rewritten text:\n\n${text}`;
+      } else if (action === 'summarize') {
+            prompt = `Please summarize the following text to make it extremely concise and to the point. Focus only on key takeaways. Return ONLY the summarized text:\n\n${text}`;
+      } else if (action === 'improve') {
+            prompt = `Please improve the grammar, structure, clarity, and tone of the following text, keeping its original length and core message. Return ONLY the improved text:\n\n${text}`;
+      } else {
+            prompt = `Please rewrite the following text according to standard professional writing assistance. Return ONLY the rewritten text:\n\n${text}`;
+      }
+
+      const contents = [
+            { role: "user", parts: [{ text: prompt }] }
+      ];
+
+      try {
+            const result = await generateContent(apiKey, MODEL_ID, contents, {
+                  temperature: 0.5,
+                  maxOutputTokens: 2000
+            });
+            return result;
+      } catch (error) {
+            console.error('Rewrite error:', error);
+            throw error;
+      }
+}
 module.exports = {
       transcribeAudio,
       analyzeImage,
       chatWithSession,
       analyzeMedia,
+      rewriteText,
       getMetrics
 }

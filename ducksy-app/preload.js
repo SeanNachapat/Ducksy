@@ -18,7 +18,8 @@ contextBridge.exposeInMainWorld("electron", {
                   "activate-magic-lens",
                   "selection-complete",
                   "resize-recording-window",
-                  "set-mic-device"
+                  "set-mic-device",
+                  "set-ignore-mouse"
             ]
             if (validChannels.includes(channel)) {
                   ipcRenderer.send(channel, data)
