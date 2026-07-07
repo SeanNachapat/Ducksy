@@ -111,11 +111,14 @@ export default function AuthLayout({ children }) {
                         </div>
                     </div>
                     <button 
-                        onClick={() => setIsCollapsed(true)}
-                        className="p-1 rounded hover:bg-white/5 text-neutral-500 hover:text-neutral-300 transition-all cursor-pointer shrink-0"
+                        onClick={() => {
+                            console.log("Sidebar collapse clicked")
+                            setIsCollapsed(true)
+                        }}
+                        className="p-1.5 rounded hover:bg-white/5 text-neutral-500 hover:text-neutral-300 transition-all cursor-pointer shrink-0 non-draggable"
                         title="Collapse Sidebar"
                     >
-                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <ChevronLeft className="w-4 h-4" />
                     </button>
                 </div>
 
@@ -133,13 +136,7 @@ export default function AuthLayout({ children }) {
                         </kbd>
                     </button>
 
-                    <button 
-                        onClick={() => setIsSettingsOpen(true)}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left transition-all group ${isSettingsOpen ? 'bg-white/5 text-neutral-200' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}
-                    >
-                        <Settings className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300" />
-                        <span>Settings</span>
-                    </button>
+
 
                     <button 
                         onClick={handleNewRecording}
@@ -228,14 +225,27 @@ export default function AuthLayout({ children }) {
                 </div>
 
 
+                {/* Footer Settings Button */}
+                <div className="p-3 border-t border-white/5 bg-[#171717]/30 mt-auto shrink-0">
+                    <button 
+                        onClick={() => setIsSettingsOpen(true)}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all group cursor-pointer ${isSettingsOpen ? 'bg-white/5 text-neutral-200 font-semibold' : 'hover:bg-white/5 text-neutral-400 hover:text-neutral-200'}`}
+                    >
+                        <Settings className="w-4 h-4 text-neutral-500 group-hover:text-neutral-300 transition-transform group-hover:rotate-45 duration-300" />
+                        <span className="text-xs">Settings</span>
+                    </button>
+                </div>
             </aside>
 
             {/* Main Canvas content */}
             <div className="flex-1 flex flex-col h-full bg-[#202020] relative overflow-hidden select-text">
                 {isCollapsed && (
                     <button
-                        onClick={() => setIsCollapsed(false)}
-                        className="absolute top-4 left-4 z-40 p-1.5 rounded-lg border border-white/5 bg-[#191919] hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all cursor-pointer shadow-lg flex items-center justify-center"
+                        onClick={() => {
+                            console.log("Sidebar expand clicked")
+                            setIsCollapsed(false)
+                        }}
+                        className="absolute top-4 left-4 z-40 p-1.5 rounded-lg border border-white/5 bg-[#191919] hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all cursor-pointer shadow-lg flex items-center justify-center non-draggable"
                         title="Expand Sidebar"
                     >
                         <ChevronRight className="w-4 h-4" />

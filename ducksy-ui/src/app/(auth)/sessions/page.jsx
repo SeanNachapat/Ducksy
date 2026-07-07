@@ -390,16 +390,16 @@ function SessionsPageContent() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setSelectedSession(null)}
-                            className="absolute inset-0 bg-black/40 backdrop-blur-sm z-45"
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-45"
                         />
                         <motion.div
                             initial={{ x: "100%" }}
                             animate={{ x: 0 }}
                             exit={{ x: "100%" }}
                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                            className="absolute top-0 right-0 h-full w-full md:w-1/3 min-w-[350px] bg-neutral-950/95 backdrop-blur-xl border-l border-white/10 z-50 shadow-2xl overflow-hidden flex flex-col"
+                            className="fixed top-0 right-0 h-full w-full md:w-[420px] bg-[#191919] border-l border-white/5 z-50 shadow-[0_0_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col"
                         >
-                            <div className="p-6 border-b border-white/5 flex items-start justify-between bg-neutral-900/30">
+                            <div className="p-6 border-b border-white/5 flex items-start justify-between bg-neutral-900/10">
                                 <div>
                                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                                         <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-white/5 text-neutral-400 border border-white/5">
@@ -422,7 +422,7 @@ function SessionsPageContent() {
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                                <div className="mb-6">
+                                <div className="mb-6 p-4.5 rounded-2xl bg-neutral-950/40 border border-white/5">
                                     <MediaPreview
                                         fileId={selectedSession.id}
                                         filePath={selectedSession.filePath}
@@ -624,31 +624,38 @@ function SessionsPageContent() {
                                 </div>
                             </div>
 
-                            <div className="p-6 border-t border-white/5 bg-neutral-900/30 flex gap-3 mt-auto shrink-0">
+                            <div className="p-6 border-t border-white/5 bg-neutral-950/60 flex gap-3 mt-auto shrink-0 items-center">
                                 <button
                                     onClick={handleRefreshSession}
                                     disabled={isRefreshing || selectedSession.transcriptionStatus === 'processing'}
-                                    className="py-3 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                                    title={t.sessionsPage?.refresh || "Refresh"}
                                 >
                                     {isRefreshing ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                     ) : (
-                                        <RefreshCw className="w-4 h-4" />
+                                        <RefreshCw className="w-3.5 h-3.5" />
                                     )}
-                                    <span className="text-sm font-medium">{t.sessionsPage?.refresh || "Refresh"}</span>
                                 </button>
-                                <button className="flex-1 py-3 rounded-xl bg-white/5 border border-white/5 text-sm font-medium hover:bg-white/10 hover:text-white text-neutral-300 transition-colors flex items-center justify-center gap-2">
-                                    <ExternalLink className="w-4 h-4" /> {t.dashboardPage?.openOverlay || "Open Overlay"}
+                                <button 
+                                    onClick={() => {
+                                        if (typeof window !== 'undefined' && window.electron) {
+                                            window.electron.send('open-overlay')
+                                        }
+                                    }}
+                                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-200 border border-white/10 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                                >
+                                    <ExternalLink className="w-3.5 h-3.5" /> {t.dashboardPage?.openOverlay || "Open Overlay"}
                                 </button>
                                 <button
                                     onClick={handleDeleteSession}
                                     disabled={isDeleting}
-                                    className="py-3 px-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-all cursor-pointer shadow-sm disabled:opacity-50"
                                 >
                                     {isDeleting ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                     ) : (
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     )}
                                 </button>
                             </div>

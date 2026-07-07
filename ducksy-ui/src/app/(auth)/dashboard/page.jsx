@@ -24,7 +24,9 @@ import {
       Loader2,
       RefreshCw,
       Plus,
-      Upload
+      Upload,
+      Search,
+      Cpu
 } from "lucide-react"
 import Link from "next/link"
 import { useSettings } from "@/hooks/SettingsContext"
@@ -37,7 +39,22 @@ import CalendarEventCard from "@/components/CalendarEventCard"
 import EditableEventModal from "@/components/EditableEventModal"
 import ThinkingIndicator from "@/components/ThinkingIndicator"
 import DashboardSearch from "@/components/DashboardSearch"
-function LiveSystemMetrics() {
+export default function DashboardPage() {
+      const [selectedSession, setSelectedSession] = useState(null)
+      const [micDevice, setMicDevice] = useState(null)
+      const [isDeleting, setIsDeleting] = useState(false)
+      const [isDragging, setIsDragging] = useState(false)
+      const [isProcessingFile, setIsProcessingFile] = useState(false)
+      const [databaseView, setDatabaseView] = useState('table')
+      const fileInputRef = useRef(null)
+      const [showCalendarModal, setShowCalendarModal] = useState(false)
+      const [eventDate, setEventDate] = useState('')
+      const [eventTime, setEventTime] = useState('')
+      const [calendarLoading, setCalendarLoading] = useState(false)
+      const [calendarSuccess, setCalendarSuccess] = useState(false)
+      const [editingEvent, setEditingEvent] = useState(null)
+      
+      const [searchQuery, setSearchQuery] = useState('')
       const [metrics, setMetrics] = useState({
             latency: 0,
             tokensUsed: 0,
@@ -45,6 +62,7 @@ function LiveSystemMetrics() {
             mcpConnected: false,
             lastUpdated: 0
       })
+
       useEffect(() => {
             const fetchMetrics = async () => {
                   if (typeof window !== 'undefined' && window.electron) {
@@ -62,67 +80,13 @@ function LiveSystemMetrics() {
             const interval = setInterval(fetchMetrics, 3000)
             return () => clearInterval(interval)
       }, [])
+
       const formatTokens = (num) => {
             if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
             if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
             return num.toString()
       }
-      const isStale = Date.now() - metrics.lastUpdated > 60000
-      return (
-            <div className="flex items-center gap-3 font-mono text-xs bg-neutral-900/70 px-4 py-2.5 rounded-xl border border-white/5 backdrop-blur-md">
-                  <div className="flex items-center gap-2">
-                        <span className="text-neutral-500 uppercase tracking-wider text-[10px]">LAT</span>
-                        <span className={`font-bold tabular-nums ${metrics.latency === 0 ? 'text-neutral-500' :
-                              metrics.latency < 500 ? 'text-green-400' :
-                                    metrics.latency < 1000 ? 'text-yellow-400' : 'text-red-400'
-                              }`}>
-                              {metrics.latency === 0 ? '--' : `${metrics.latency}ms`}
-                        </span>
-                  </div>
-                  <span className="w-px h-4 bg-white/10" />
-                  <div className="flex items-center gap-2">
-                        <span className="text-neutral-500 uppercase tracking-wider text-[10px]">TKN</span>
-                        <span className="font-bold tabular-nums">
-                              <span className={metrics.tokensUsed > 800000 ? 'text-yellow-400' : 'text-green-400'}>
-                                    {formatTokens(metrics.tokensUsed)}
-                              </span>
-                              <span className="text-neutral-600">/</span>
-                              <span className="text-neutral-500">1M</span>
-                        </span>
-                  </div>
-                  <span className="w-px h-4 bg-white/10" />
-                  <div className="flex items-center gap-2">
-                        <span className="text-neutral-500 uppercase tracking-wider text-[10px]">MCP</span>
-                        <div className="flex items-center gap-1.5">
-                              <div className={`w-2 h-2 rounded-full ${metrics.mcpConnected
-                                    ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse'
-                                    : isStale
-                                          ? 'bg-neutral-500'
-                                          : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'
-                                    }`} />
-                              <span className={`font-bold uppercase text-[10px] ${metrics.mcpConnected ? 'text-green-400' : isStale ? 'text-neutral-500' : 'text-red-400'
-                                    }`}>
-                                    {metrics.mcpConnected ? 'LINK' : isStale ? 'IDLE' : 'ERR'}
-                              </span>
-                        </div>
-                  </div>
-            </div>
-      )
-}
-export default function DashboardPage() {
-      const [selectedSession, setSelectedSession] = useState(null)
-      const [micDevice, setMicDevice] = useState(null)
-      const [isDeleting, setIsDeleting] = useState(false)
-      const [isDragging, setIsDragging] = useState(false)
-      const [isProcessingFile, setIsProcessingFile] = useState(false)
-      const [databaseView, setDatabaseView] = useState('table')
-      const fileInputRef = useRef(null)
-      const [showCalendarModal, setShowCalendarModal] = useState(false)
-      const [eventDate, setEventDate] = useState('')
-      const [eventTime, setEventTime] = useState('')
-      const [calendarLoading, setCalendarLoading] = useState(false)
-      const [calendarSuccess, setCalendarSuccess] = useState(false)
-      const [editingEvent, setEditingEvent] = useState(null)
+
       const { t, settings } = useSettings()
       const { sessionLogs, isLoading, error, refetch, deleteSession } = useSessionLogs()
       const suggestedEvents = sessionLogs.reduce((acc, log) => {
@@ -143,6 +107,17 @@ export default function DashboardPage() {
                   }));
             return [...acc, ...events];
       }, []).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+      const filteredSessionLogs = sessionLogs ? sessionLogs.filter(log => {
+            if (!searchQuery) return true;
+            const q = searchQuery.toLowerCase();
+            return (
+                  (log.title && log.title.toLowerCase().includes(q)) ||
+                  (log.subtitle && log.subtitle.toLowerCase().includes(q)) ||
+                  (log.type && log.type.toLowerCase().includes(q))
+            );
+      }) : [];
+
       const handleDismissCalendarEvent = async (fileId, index) => {
             if (!window.electron) return
             try {
@@ -403,65 +378,128 @@ export default function DashboardPage() {
       }
 
       return (
-            <div className="flex-1 flex flex-col h-full bg-[#202020] text-neutral-200 font-sans overflow-y-auto custom-scrollbar selection:bg-amber-500/30 relative">
-                  {/* Notion-style Cover Banner */}
-                  <div className="relative w-full h-44 bg-gradient-to-r from-[#1f1f1f] via-[#2d2218] to-[#1f1f1f] border-b border-white/5 shrink-0">
-                        {/* Mesh gradients / glowing orbs */}
-                        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-80 h-28 bg-amber-500/5 rounded-full blur-[60px] pointer-events-none" />
-                        <div className="absolute top-1/3 right-1/4 -translate-y-1/2 w-64 h-24 bg-orange-500/5 rounded-full blur-[50px] pointer-events-none" />
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(251,191,36,0.06),transparent_50%)] pointer-events-none" />
+            <div className="flex-1 flex flex-col h-full bg-[#1e1e1e] text-neutral-200 font-sans overflow-y-auto custom-scrollbar selection:bg-amber-500/30 relative">
+                  {/* Premium Cyber Grid Banner Cover */}
+                  <div className="relative w-full h-48 bg-[#151515] overflow-hidden shrink-0 border-b border-white/5">
+                        {/* Grid lines */}
+                        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:28px_28px] opacity-70" />
+                        
+                        {/* Soft colorful gradient spotlights */}
+                        <div className="absolute -top-20 left-1/4 w-[500px] h-60 bg-amber-500/10 rounded-full blur-[100px] animate-pulse duration-[8000ms]" />
+                        <div className="absolute top-10 right-1/4 w-80 h-40 bg-orange-600/5 rounded-full blur-[85px] animate-pulse duration-[12000ms]" />
+                        
+                        {/* Dark fading vignette */}
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,#151515_90%)]" />
+                        <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-[#1e1e1e] to-transparent" />
                   </div>
 
-                  {/* Overlapping Page Emoji */}
-                  <div className="max-w-5xl w-full mx-auto px-8 relative -mt-10 mb-4 z-10 select-none">
-                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#202020] border border-white/5 text-4xl shadow-lg hover:scale-105 transition-transform duration-300">
-                              🦆
+                  {/* Overlapping Page Emoji Avatar */}
+                  <div className="max-w-5xl w-full mx-auto px-8 relative -mt-12 mb-4 z-10 select-none shrink-0">
+                        <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-[#1e1e1e]/90 backdrop-blur-xl border border-white/10 text-5xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] hover:scale-105 hover:rotate-2 hover:border-amber-500/30 transition-all duration-500 ease-out cursor-default group">
+                              <span className="group-hover:animate-bounce inline-block">🦆</span>
                         </div>
                   </div>
 
-                  {/* Main Document Content Canvas */}
+                  {/* Main Workspace Canvas */}
                   <div className="max-w-5xl w-full mx-auto px-8 pb-16 space-y-8 flex-1 flex flex-col z-10">
-                        {/* Page Title Header */}
-                        <div className="space-y-1">
+                        {/* Page Header */}
+                        <div className="space-y-1.5">
                               <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
                                     {t.dashboard || "Dashboard"}
                               </h1>
-                              <p className="text-xs text-neutral-500 font-medium">
-                                    Welcome to your Ducksy AI Workspace. Use the sidebar to navigate, or upload logs and capture screen context.
+                              <p className="text-xs text-neutral-500 font-medium leading-relaxed max-w-xl">
+                                    Welcome to your Ducksy AI Workspace. Control settings, manage system operations, drop content, and inspect logs.
                               </p>
                         </div>
 
-                        {/* Notion Callout Blocks (Metrics & Audio) */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Callout 1: System Status & Metrics */}
-                              <div className="flex gap-3.5 p-4 rounded-xl border border-l-4 border-white/5 border-l-amber-500/50 bg-[#272727]/30 backdrop-blur-md">
-                                    <div className="text-xl select-none">⚡</div>
-                                    <div className="space-y-1.5 flex-1 min-w-0">
-                                          <h3 className="text-[10px] font-bold font-mono uppercase tracking-wider text-neutral-500 leading-none">System Metrics</h3>
-                                          <LiveSystemMetrics />
+                        {/* Workspace Live Status Control Strip */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              {/* Card 1: Network Latency */}
+                              <div className="flex items-center justify-between p-4.5 rounded-2xl bg-neutral-900/35 border border-white/5 backdrop-blur-md relative overflow-hidden group hover:border-amber-500/20 transition-all duration-300">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/[0.01] rounded-full blur-2xl" />
+                                    <div className="flex items-center gap-3">
+                                          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-sm shrink-0">
+                                                <Activity className="w-4 h-4" />
+                                          </div>
+                                          <div className="space-y-0.5">
+                                                <h4 className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest leading-none">Network Latency</h4>
+                                                <span className={`text-sm font-bold font-mono tracking-tight leading-none ${
+                                                      metrics.latency === 0 ? 'text-neutral-500' :
+                                                      metrics.latency < 500 ? 'text-green-400' :
+                                                      metrics.latency < 1000 ? 'text-yellow-400' : 'text-red-400'
+                                                }`}>
+                                                      {metrics.latency === 0 ? '--' : `${metrics.latency}ms`}
+                                                </span>
+                                          </div>
+                                    </div>
+                                    <div className="text-right z-10">
+                                          {(() => {
+                                                const isStale = Date.now() - metrics.lastUpdated > 60000;
+                                                const mcpStatusText = metrics.mcpConnected ? 'Linked' : isStale ? 'Idle' : 'Offline';
+                                                const mcpStatusColor = metrics.mcpConnected ? 'bg-green-500/10 text-green-400 border-green-500/20 shadow-[0_0_8px_rgba(34,197,94,0.1)]' :
+                                                                       isStale ? 'bg-neutral-800 text-neutral-400 border-white/5' : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.1)]';
+                                                return (
+                                                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-bold tracking-wider uppercase ${mcpStatusColor}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${metrics.mcpConnected ? 'bg-green-400 animate-pulse' : isStale ? 'bg-neutral-400' : 'bg-red-400 animate-ping'}`} />
+                                                            {mcpStatusText}
+                                                      </span>
+                                                )
+                                          })()}
                                     </div>
                               </div>
-                              
-                              {/* Callout 2: Voice & Device Selection */}
-                              <div className="flex gap-3.5 p-4 rounded-xl border border-l-4 border-white/5 border-l-amber-500/50 bg-[#272727]/30 backdrop-blur-md">
-                                    <div className="text-xl select-none">🎤</div>
-                                    <div className="space-y-1.5 flex-1 min-w-0">
-                                          <h3 className="text-[10px] font-bold font-mono uppercase tracking-wider text-neutral-500 leading-none">Audio Device</h3>
-                                          <div className="flex items-center h-full">
+
+                              {/* Card 2: Token Utilization */}
+                              <div className="flex flex-col justify-between p-4.5 rounded-2xl bg-neutral-900/35 border border-white/5 backdrop-blur-md relative overflow-hidden group hover:border-amber-500/20 transition-all duration-300">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/[0.01] rounded-full blur-2xl" />
+                                    {(() => {
+                                          const pct = Math.min(100, Math.max(0, (metrics.tokensUsed / metrics.tokensTotal) * 100))
+                                          return (
+                                                <>
+                                                      <div className="flex items-center justify-between mb-1.5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                                  <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest leading-none">Token Usage</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold font-mono text-neutral-400 leading-none">
+                                                                  {formatTokens(metrics.tokensUsed)} <span className="text-neutral-600">/</span> 1M
+                                                            </span>
+                                                      </div>
+                                                      <div className="w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-white/5">
+                                                            <div 
+                                                                  className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
+                                                                  style={{ width: `${pct}%` }}
+                                                            />
+                                                      </div>
+                                                </>
+                                          )
+                                    })()}
+                              </div>
+
+                              {/* Card 3: Mic Hardware */}
+                              <div className="flex items-center gap-3 p-4.5 rounded-2xl bg-neutral-900/35 border border-white/5 backdrop-blur-md relative overflow-hidden group hover:border-amber-500/20 transition-all duration-300">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/[0.01] rounded-full blur-2xl" />
+                                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shadow-sm shrink-0">
+                                          <Mic className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                          <h4 className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest leading-none">Audio Device</h4>
+                                          <div className="relative">
                                                 <MicDevice setMicDevice={setMicDevice} micDevice={micDevice} />
                                           </div>
                                     </div>
                               </div>
                         </div>
 
-                        {/* Top Controls Grid: Launch Overlay / File Upload / Up Next */}
+                        {/* Top Action Controls Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                              {/* Quick Action: Launch Overlay */}
-                              <div className="bg-[#272727]/30 border border-white/5 rounded-2xl p-5 flex flex-col justify-between h-44 hover:border-white/10 hover:bg-[#272727]/40 transition-all group">
-                                    <div className="space-y-1">
-                                          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest block leading-none">Capture Overlay</span>
-                                          <h3 className="text-sm font-bold text-neutral-200 group-hover:text-amber-400 transition-colors">Go Invisible</h3>
-                                          <p className="text-xs text-neutral-500 leading-normal">
+                              {/* Launch Companion Overlay */}
+                              <div className="bg-neutral-900/35 border border-white/5 rounded-2xl p-5 flex flex-col justify-between h-48 hover:border-amber-500/20 hover:bg-neutral-900/40 hover:-translate-y-0.5 transition-all duration-300 group shadow-lg">
+                                    <div className="space-y-1.5">
+                                          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
+                                                <Zap className="w-4 h-4 fill-current" strokeWidth={0} />
+                                          </div>
+                                          <h3 className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 transition-colors">Go Invisible</h3>
+                                          <p className="text-[11px] text-neutral-500 leading-relaxed font-medium">
                                                 Minimize dashboard to system tray and launch the desktop overlay companion on your screen.
                                           </p>
                                     </div>
@@ -471,19 +509,19 @@ export default function DashboardPage() {
                                                       window.electron.send('open-overlay')
                                                 }
                                           }}
-                                          className="w-full py-2 bg-amber-500 text-neutral-950 text-xs font-bold rounded-xl hover:bg-amber-400 transition-colors shadow-sm mt-2 flex items-center justify-center gap-1.5"
+                                          className="w-full py-2.5 bg-amber-500 text-neutral-950 text-xs font-extrabold rounded-xl hover:bg-amber-400 active:scale-[0.98] transition-all shadow-[0_4px_16px_rgba(245,158,11,0.15)] flex items-center justify-center gap-1.5 cursor-pointer"
                                     >
-                                          <Zap className="w-3.5 h-3.5 fill-current" strokeWidth={0} />
+                                          <ExternalLink className="w-3.5 h-3.5" />
                                           {t.dashboardPage.launchOverlay}
                                     </button>
                               </div>
 
                               {/* Notion Drag & Drop Media Box */}
                               <div 
-                                    className={`border border-dashed rounded-2xl p-5 h-44 flex flex-col items-center justify-center text-center transition-all cursor-pointer select-none group/dropzone
+                                    className={`border border-dashed rounded-2xl p-5 h-48 flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer select-none group/dropzone relative overflow-hidden
                                     ${isDragging
-                                          ? 'border-amber-500 bg-amber-500/10'
-                                          : 'border-white/10 bg-[#272727]/10 hover:border-amber-500/30 hover:bg-[#272727]/30'
+                                          ? 'border-amber-500 bg-amber-500/10 shadow-[0_0_20px_rgba(245,158,11,0.1)]'
+                                          : 'border-white/10 bg-neutral-900/15 hover:border-amber-500/20 hover:bg-neutral-900/30'
                                     }`}
                                     onDrop={handleDrop}
                                     onDragOver={handleDragOver}
@@ -499,34 +537,42 @@ export default function DashboardPage() {
                                     />
                                     {isProcessingFile ? (
                                           <div className="flex flex-col items-center">
-                                                <Loader2 className="w-6 h-6 text-amber-500 animate-spin mb-2" />
-                                                <span className="text-xs text-amber-500 font-medium animate-pulse">Processing...</span>
+                                                <Loader2 className="w-7 h-7 text-amber-500 animate-spin mb-2" />
+                                                <span className="text-xs text-amber-500 font-bold tracking-wide animate-pulse">Processing file...</span>
                                           </div>
                                     ) : (
                                           <div className="flex flex-col items-center">
-                                                <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover/dropzone:scale-105 transition-transform text-neutral-400 group-hover/dropzone:text-amber-500">
+                                                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center mb-2.5 group-hover/dropzone:scale-105 group-hover/dropzone:bg-amber-500/10 group-hover/dropzone:text-amber-500 transition-all duration-300 text-neutral-400">
                                                       <Upload className="w-4 h-4" strokeWidth={1.5} />
                                                 </div>
-                                                <span className="text-xs text-neutral-300 font-semibold group-hover/dropzone:text-neutral-200">
+                                                <span className="text-xs text-neutral-300 font-bold tracking-tight">
                                                       Drop audio or image
                                                 </span>
-                                                <span className="text-[10px] text-neutral-500 mt-1">
-                                                      or click to upload
+                                                <span className="text-[10px] text-neutral-500 font-medium mt-1">
+                                                      or click to browse local files
                                                 </span>
                                           </div>
                                     )}
                               </div>
 
-                              {/* Up Next / Calendar Suggestions */}
-                              <div className="bg-[#272727]/30 border border-white/5 rounded-2xl p-5 flex flex-col h-44">
-                                    <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-1.5 shrink-0">
-                                          <h2 className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest leading-none">{t.dashboardPage.upNext}</h2>
-                                          <Calendar className="w-3.5 h-3.5 text-neutral-600" />
+                              {/* Up Next Suggestions */}
+                              <div className="bg-neutral-900/35 border border-white/5 rounded-2xl p-5.5 flex flex-col h-48 hover:border-white/10 transition-all duration-300 shadow-lg">
+                                    <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2 shrink-0">
+                                          <div className="flex items-center gap-1.5">
+                                                <Calendar className="w-3.5 h-3.5 text-neutral-500" />
+                                                <h2 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest leading-none">{t.dashboardPage.upNext}</h2>
+                                          </div>
+                                          {suggestedEvents.length > 0 && (
+                                                <span className="flex h-2 w-2 relative">
+                                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                                </span>
+                                          )}
                                     </div>
                                     <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
                                           {suggestedEvents.length > 0 ? (
                                                 suggestedEvents.map(eventData => (
-                                                      <div id={`calendar-event-${eventData.id}`} key={eventData.id}>
+                                                      <div id={`calendar-event-${eventData.id}`} key={eventData.id} className="transition-all duration-200">
                                                             <CalendarEventCard
                                                                   event={eventData}
                                                                   t={t}
@@ -540,8 +586,9 @@ export default function DashboardPage() {
                                                       </div>
                                                 ))
                                           ) : (
-                                                <div className="text-[11px] text-neutral-500 italic p-3 text-center border border-white/5 rounded-xl bg-white/[0.01] h-full flex items-center justify-center">
-                                                      {t.dashboardPage?.noUpcomingEvents || "No new events detected"}
+                                                <div className="text-[11px] text-neutral-500 italic p-3 text-center border border-white/5 rounded-xl bg-white/[0.01] h-full flex flex-col items-center justify-center gap-1">
+                                                      <span>No suggestions found</span>
+                                                      <span className="text-[9px] text-neutral-600 font-normal">Action items will be logged here</span>
                                                 </div>
                                           )}
                                     </div>
@@ -549,20 +596,34 @@ export default function DashboardPage() {
                         </div>
 
                         {/* Notion Database Block */}
-                        <div className="bg-[#272727]/20 border border-white/5 rounded-2xl p-6 space-y-4">
+                        <div className="bg-[#272727]/10 border border-white/5 rounded-2xl p-6 space-y-4 shadow-lg">
                               {/* Database Toolbar */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3.5">
                                     <div className="flex items-center gap-3">
-                                          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-                                                <Activity className="w-4 h-4" />
+                                          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                <Layers className="w-4 h-4" />
                                           </div>
                                           <div>
                                                 <h2 className="text-sm font-bold text-neutral-200">{t.dashboardPage.sessionLog}</h2>
-                                                <p className="text-[10px] text-neutral-500">Showing recent system interactions</p>
+                                                <p className="text-[10px] text-neutral-500 mt-0.5">Unified activity logging registry</p>
                                           </div>
                                     </div>
                                     
-                                    <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                                    <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap">
+                                          {/* Client search filtering */}
+                                          <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500" />
+                                                <input
+                                                      type="text"
+                                                      placeholder="Search sessions..."
+                                                      value={searchQuery}
+                                                      onChange={(e) => setSearchQuery(e.target.value)}
+                                                      className="pl-8 pr-3 py-1.5 bg-neutral-900/50 hover:bg-neutral-900/80 focus:bg-neutral-900 border border-white/5 hover:border-white/10 focus:border-amber-500/30 rounded-lg text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none w-44 transition-all"
+                                                />
+                                          </div>
+
+                                          <span className="w-px h-4 bg-white/10" />
+
                                           {/* View Selector */}
                                           <div className="flex items-center gap-1 bg-neutral-900/40 rounded-lg p-0.5 border border-white/5">
                                                 <button
@@ -584,13 +645,13 @@ export default function DashboardPage() {
                                           <button
                                                 onClick={refetch}
                                                 disabled={isLoading}
-                                                className="p-1.5 rounded-lg hover:bg-white/5 text-neutral-500 hover:text-white transition-colors disabled:opacity-50"
+                                                className="p-1.5 rounded-lg hover:bg-white/5 text-neutral-500 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
                                           >
                                                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                                           </button>
 
                                           <Link href="/sessions">
-                                                <button className="text-[9px] font-bold font-mono text-neutral-500 hover:text-white transition-colors uppercase tracking-widest border border-white/5 px-2.5 py-1.5 rounded-lg hover:bg-white/5">
+                                                <button className="text-[9px] font-bold font-mono text-neutral-500 hover:text-white transition-colors uppercase tracking-widest border border-white/5 px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer">
                                                       {t.viewAll}
                                                 </button>
                                           </Link>
@@ -599,7 +660,7 @@ export default function DashboardPage() {
 
                               {/* Database Content Area */}
                               <div className="min-h-[220px]">
-                                    {isLoading && sessionLogs.length === 0 ? (
+                                    {isLoading && filteredSessionLogs.length === 0 ? (
                                           <div className="flex flex-col items-center justify-center py-16">
                                                 <Loader2 className="w-7 h-7 text-amber-500 animate-spin mb-3" />
                                                 <p className="text-xs text-neutral-500">{t.session.loading}</p>
@@ -615,11 +676,11 @@ export default function DashboardPage() {
                                                       {t.session.tryAgain}
                                                 </button>
                                           </div>
-                                    ) : sessionLogs.length === 0 ? (
+                                    ) : filteredSessionLogs.length === 0 ? (
                                           <div className="flex flex-col items-center justify-center py-16 text-neutral-500 text-center">
-                                                <FileText className="w-9 h-9 mb-2 opacity-30" />
-                                                <p className="text-xs font-semibold">{t.session.noSessions}</p>
-                                                <p className="text-[10px] mt-0.5 text-neutral-600">{t.session.noSessionsDesc}</p>
+                                                <FileText className="w-9 h-9 mb-2 opacity-30 text-amber-500" />
+                                                <p className="text-xs font-bold">{searchQuery ? "No matching sessions" : t.session.noSessions}</p>
+                                                <p className="text-[10px] mt-0.5 text-neutral-600">{searchQuery ? "Try refining your search keywords" : t.session.noSessionsDesc}</p>
                                           </div>
                                     ) : databaseView === 'table' ? (
                                           /* Notion Table View */
@@ -627,20 +688,20 @@ export default function DashboardPage() {
                                                 <table className="w-full text-left text-xs border-collapse">
                                                       <thead>
                                                             <tr className="border-b border-white/5 text-neutral-500 font-bold text-[10px] uppercase tracking-wider">
-                                                                  <th className="pb-2.5 font-normal pl-2">Title</th>
-                                                                  <th className="pb-2.5 font-normal">Subtitle</th>
-                                                                  <th className="pb-2.5 font-normal">Type</th>
-                                                                  <th className="pb-2.5 font-normal pr-2">Status</th>
+                                                                  <th className="pb-2.5 font-bold pl-2">Title</th>
+                                                                  <th className="pb-2.5 font-bold">Subtitle</th>
+                                                                  <th className="pb-2.5 font-bold">Type</th>
+                                                                  <th className="pb-2.5 font-bold pr-2">Status</th>
                                                             </tr>
                                                       </thead>
                                                       <tbody className="divide-y divide-white/[0.03]">
-                                                            {sessionLogs.map((log) => (
+                                                            {filteredSessionLogs.map((log) => (
                                                                   <tr 
                                                                         key={log.id} 
                                                                         onClick={() => setSelectedSession(log)} 
                                                                         className="hover:bg-white/[0.02] cursor-pointer transition-colors group"
                                                                   >
-                                                                        <td className="py-3 font-semibold text-neutral-200 truncate max-w-[200px] pl-2 flex items-center gap-2">
+                                                                        <td className="py-3.5 font-bold text-neutral-200 truncate max-w-[200px] pl-2 flex items-center gap-2">
                                                                               <span className="shrink-0 text-sm">
                                                                                     {log.type === 'summary' ? '📄' : log.type === 'debug' ? '🐞' : '🖼️'}
                                                                               </span>
@@ -648,10 +709,10 @@ export default function DashboardPage() {
                                                                                     {log.title}
                                                                               </span>
                                                                         </td>
-                                                                        <td className="py-3 text-neutral-500 truncate max-w-[240px]">
+                                                                        <td className="py-3.5 text-neutral-500 truncate max-w-[240px]">
                                                                               {log.subtitle}
                                                                         </td>
-                                                                        <td className="py-3">
+                                                                        <td className="py-3.5">
                                                                               <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold font-mono tracking-wider
                                                                                     ${log.type === 'summary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
                                                                                       log.type === 'debug' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
@@ -660,7 +721,7 @@ export default function DashboardPage() {
                                                                                     {log.type}
                                                                               </span>
                                                                         </td>
-                                                                        <td className="py-3 pr-2">
+                                                                        <td className="py-3.5 pr-2">
                                                                               <div className="flex items-center justify-between">
                                                                                     {getStatusBadge(log.transcriptionStatus)}
                                                                                     <ChevronRight className="w-3.5 h-3.5 text-neutral-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -674,11 +735,11 @@ export default function DashboardPage() {
                                     ) : (
                                           /* Notion Gallery View */
                                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                                {sessionLogs.map((log) => (
+                                                {filteredSessionLogs.map((log) => (
                                                       <div 
                                                             key={log.id} 
                                                             onClick={() => setSelectedSession(log)} 
-                                                            className="p-4 rounded-xl bg-neutral-900/30 border border-white/5 hover:border-white/10 hover:bg-neutral-900/40 cursor-pointer transition-all flex flex-col justify-between h-36 group"
+                                                            className="p-4 rounded-xl bg-neutral-900/35 border border-white/5 hover:border-amber-500/25 hover:bg-neutral-900/50 cursor-pointer transition-all flex flex-col justify-between h-36 group shadow-md"
                                                       >
                                                             <div>
                                                                   <div className="flex items-center justify-between mb-2">
@@ -694,7 +755,7 @@ export default function DashboardPage() {
                                                                   <h3 className="text-xs font-bold text-neutral-200 truncate group-hover:text-amber-400 transition-colors">
                                                                         {log.title}
                                                                   </h3>
-                                                                  <p className="text-[11px] text-neutral-500 line-clamp-2 mt-1.5 leading-normal">
+                                                                  <p className="text-[11px] text-neutral-500 line-clamp-2 mt-1.5 leading-normal font-medium">
                                                                         {log.subtitle}
                                                                   </p>
                                                             </div>
@@ -728,16 +789,16 @@ export default function DashboardPage() {
                                           animate={{ opacity: 1 }}
                                           exit={{ opacity: 0 }}
                                           onClick={() => setSelectedSession(null)}
-                                          className="absolute inset-0 bg-black/40 backdrop-blur-sm z-45"
+                                          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-45"
                                     />
                                     <motion.div
                                           initial={{ x: "100%" }}
                                           animate={{ x: 0 }}
                                           exit={{ x: "100%" }}
                                           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                          className="absolute top-0 right-0 h-full w-full md:w-1/3 min-w-[350px] bg-[#202020] border-l border-white/10 z-50 shadow-2xl overflow-hidden flex flex-col"
+                                          className="fixed top-0 right-0 h-full w-full md:w-[420px] bg-[#191919] border-l border-white/5 z-50 shadow-[0_0_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col"
                                     >
-                                          <div className="p-6 border-b border-white/5 flex items-start justify-between bg-neutral-900/30">
+                                          <div className="p-6 border-b border-white/5 flex items-start justify-between bg-neutral-900/10">
                                                 <div>
                                                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                                                             <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-white/5 text-neutral-400 border border-white/5">
@@ -764,7 +825,7 @@ export default function DashboardPage() {
                                                 </button>
                                           </div>
                                           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                                                <div className="mb-6">
+                                                <div className="mb-6 p-4.5 rounded-2xl bg-neutral-950/40 border border-white/5">
                                                       <MediaPreview
                                                             fileId={selectedSession.id}
                                                             filePath={selectedSession.filePath}
@@ -970,9 +1031,16 @@ export default function DashboardPage() {
                                                       />
                                                 </div>
                                           </div>
-                                          <div className="p-6 border-t border-white/5 bg-neutral-900/30 flex gap-3 mt-auto shrink-0">
-                                                <button className="flex-1 py-3 rounded-xl bg-white/5 border border-white/5 text-sm font-medium hover:bg-white/10 hover:text-white text-neutral-300 transition-colors flex items-center justify-center gap-2">
-                                                      <ExternalLink className="w-4 h-4" /> {t.dashboardPage.openOverlay}
+                                          <div className="p-6 border-t border-white/5 bg-neutral-950/60 flex gap-3 mt-auto shrink-0 items-center">
+                                                <button 
+                                                      onClick={() => {
+                                                            if (typeof window !== 'undefined' && window.electron) {
+                                                                  window.electron.send('open-overlay')
+                                                            }
+                                                      }}
+                                                      className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-200 border border-white/10 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                                                >
+                                                      <ExternalLink className="w-3.5 h-3.5" /> {t.dashboardPage.openOverlay}
                                                 </button>
                                                 <button
                                                       onClick={async () => {
@@ -984,20 +1052,20 @@ export default function DashboardPage() {
                                                                   refetch()
                                                             }
                                                       }}
-                                                      className="py-3 px-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                                      className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-all cursor-pointer shadow-sm"
                                                       title={t.sessionsPage?.refresh || "Refresh"}
                                                 >
-                                                      <RefreshCw className="w-4 h-4" />
+                                                      <RefreshCw className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
                                                       onClick={handleDeleteSession}
                                                       disabled={isDeleting}
-                                                      className="py-3 px-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                      className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-all cursor-pointer shadow-sm disabled:opacity-50"
                                                 >
                                                       {isDeleting ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                       ) : (
-                                                            <Trash2 className="w-4 h-4" />
+                                                            <Trash2 className="w-3.5 h-3.5" />
                                                       )}
                                                 </button>
                                           </div>
